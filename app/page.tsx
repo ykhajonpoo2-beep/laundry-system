@@ -80,6 +80,7 @@ const formatRemainingTime = (endTime: number | null) => {
 };
   return (
     <main className="min-h-screen bg-gray-100 p-4">
+      <h1>TEST DEPLOY 🔥</h1>
       <h1 className="text-xl font-bold mb-4">
   🧺 Laundry System (NEW UI V2)
 </h1>

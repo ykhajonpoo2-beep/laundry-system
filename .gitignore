@@ -42,3 +42,13 @@ next-env.d.ts
 
 .vercel
 .env*.local
+node_modules
+.next
+.env
+.env.local
+dist
+build
+
+# Arduino
+.arduinoIDE
+*.log
