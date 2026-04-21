@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "status": "available",
+    "endTime": null,
+    "timeLeft": 0
+  },
+  {
+    "id": 2,
+    "status": "available",
+    "endTime": null,
+    "timeLeft": 0
+  },
+  {
+    "id": 3,
+    "status": "available",
+    "endTime": null,
+    "timeLeft": 0
+  }
+]
