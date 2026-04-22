@@ -43,23 +43,34 @@ const defaultMachines: Machine[] = [
 export async function getMachines(): Promise<Machine[]> {
   const data = await redis.get("machines");
 
-  // ถ้ายังไม่มีข้อมูลใน Redis
   if (!data) {
     await saveMachines(defaultMachines);
     return defaultMachines;
   }
 
-  const machines = JSON.parse(String(data));
+  let machines: any[] = [];
+
+  try {
+    machines = JSON.parse(String(data));
+  } catch (e) {
+    // 🔥 ถ้า parse พัง → reset เลย
+    await saveMachines(defaultMachines);
+    return defaultMachines;
+  }
+
   const now = Date.now();
 
-  // คำนวณเวลาคงเหลือ realtime
-return machines.map((m: Machine) => ({
-  ...m,
-  lidClosed: m.lidClosed ?? true, // 👈 กัน undefined
-  timeLeft: m.endTime
-    ? Math.max(0, Math.floor((m.endTime - now) / 1000))
-    : 0,
-}));
+  return machines
+    .filter((m) => m && typeof m === "object") // 🔥 กัน null
+    .map((m: any) => ({
+      ...m,
+      lidClosed: m.lidClosed ?? true,
+      timeLeft: m.endTime
+        ? Math.max(0, Math.floor((m.endTime - now) / 1000))
+        : m.remainingTime
+        ? Math.floor(m.remainingTime / 1000)
+        : 0,
+    }));
 }
 
 export async function saveMachines(
