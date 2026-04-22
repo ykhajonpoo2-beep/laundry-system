@@ -5,122 +5,143 @@ import { useRouter } from "next/navigation";
 
 type Machine = {
   id: number;
-  status: "available" | "running" | "paused"; // ✅ เพิ่ม
+  status: "available" | "running" | "paused";
   endTime: number | null;
-  timeLeft: number;
+  remainingTime?: number;
 };
 
 export default function HomePage() {
   const router = useRouter();
-
   const [machines, setMachines] = useState<Machine[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
- const fetchMachines = async () => {
-  const controller = new AbortController();
+  const fetchMachines = async () => {
+    try {
+      const res = await fetch("/api/machines", { cache: "no-store" });
+      const data = await res.json();
+      setMachines(data);
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
-  const timeout = setTimeout(() => {
-    controller.abort(); // ⛔ ตัด request ถ้าค้าง
-  }, 5000);
-
-  try {
-    const res = await fetch("/api/machines", {
-      signal: controller.signal,
-      cache: "no-store",
-    });
-
-  const data = await res.json();
-
-if (!Array.isArray(data)) {
-  throw new Error("invalid data");
-}
-
-setMachines(data);
-  } catch (err) {
-    console.error("fetch error", err);
-    setError("เซิร์ฟเวอร์ยังไม่พร้อม");
-  } finally {
-    clearTimeout(timeout);
-    setLoading(false); // 🔥 สำคัญ
-  }
-};
-
- useEffect(() => {
-  fetchMachines();
-
-  const interval = setInterval(() => {
+  useEffect(() => {
     fetchMachines();
-  }, 3000); // 🔥 ช้าลงหน่อย (ลดโหลด server)
+    const i = setInterval(fetchMachines, 3000);
+    return () => clearInterval(i);
+  }, []);
 
-  return () => clearInterval(interval);
-}, []);
+  const getTime = (m: Machine) => {
+    if (m.status === "running" && m.endTime) {
+      return Math.max(0, Math.floor((m.endTime - Date.now()) / 1000));
+    }
+    return 0;
+  };
 
- if (loading) {
+  const isWasher = (id: number) => id <= 3;
+
   return (
-    <main className="p-4 text-center">
-      <p>⏳ กำลังเชื่อมต่อเซิร์ฟเวอร์...</p>
-      <p className="text-sm text-gray-400">
-        (ถ้าเพิ่ง deploy รอสักครู่)
-      </p>
-    </main>
-  );
-}
-const getRemainingTime = (m: any) => {
-  if (m.status === "paused") {
-    return Math.floor(m.remainingTime / 1000);
-  }
+    <main className="min-h-screen bg-gray-200 p-4">
+      <h1 className="text-xl font-bold mb-4">ร้านซัก</h1>
 
-  if (m.status === "running") {
-    return Math.max(
-      0,
-      Math.floor((m.endTime - Date.now()) / 1000)
-    );
-  }
+      <div className="grid grid-cols-2 gap-4">
+        {machines.map((m) => {
+          const running = m.status === "running";
+          const washer = isWasher(m.id);
 
-  return 0;
-};
-  return (
-    <main className="min-h-screen bg-gray-100 p-4">
-      <h1>TEST DEPLOY  🔥</h1>
-      <h1 className="text-xl font-bold mb-4">
-  🧺 Laundry System (NEW UI V3)
-</h1>
-<div className="grid grid-cols-2 gap-4">
-  {machines.map((m) => (
-    <div
-      key={m.id}
-      onClick={() => router.push(`/machine/${m.id}`)}
-      className="bg-white p-4 rounded-2xl shadow cursor-pointer"
-    >
-      {/* icon */}
-      <div className="flex justify-center mb-2">
-        <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-          🧺
-        </div>
+          return (
+            <div
+              key={m.id}
+              onClick={() => router.push(`/machine/${m.id}`)}
+              className={`
+                rounded-2xl p-4 flex gap-3 items-center cursor-pointer
+                transition-all
+                ${running ? "bg-white" : "bg-gray-600 text-white"}
+              `}
+            >
+              {/* 🔥 รูปเครื่อง */}
+              <div className="w-20 h-20 flex items-center justify-center">
+                <div className="relative">
+                  <div className="w-16 h-16 bg-gray-300 rounded-xl flex items-center justify-center">
+                    {/* drum */}
+                    <div
+                      className={`
+                        w-10 h-10 rounded-full
+                        ${washer ? "bg-blue-400" : "bg-orange-400"}
+                        ${running ? "animate-spin" : ""}
+                      `}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 🔥 ข้อมูล */}
+              <div className="flex-1">
+                {/* badge */}
+                <div className="flex justify-between items-center mb-1">
+                  <span
+                    className={`
+                      text-xs px-2 py-0.5 rounded-full
+                      ${
+                        washer
+                          ? "bg-blue-500 text-white"
+                          : "bg-orange-500 text-white"
+                      }
+                    `}
+                  >
+                    {washer ? "ซักผ้า" : "อบผ้า"}
+                  </span>
+                </div>
+
+                {/* name */}
+                <div className="font-semibold">
+                  เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.
+                  {String(m.id).padStart(2, "0")}
+                </div>
+
+                {/* time */}
+                {running ? (
+                  <div className="text-sm text-gray-500 mt-1 flex items-center gap-1">
+                    🕒 {Math.floor(getTime(m) / 60)
+                      .toString()
+                      .padStart(2, "0")}
+                    :
+                    {(getTime(m) % 60)
+                      .toString()
+                      .padStart(2, "0")}{" "}
+                    เหลือ
+                  </div>
+                ) : (
+                  <div className="text-sm mt-1 opacity-80">
+                    สแตนด์บาย
+                  </div>
+                )}
+
+                {/* status button */}
+                <div className="mt-2">
+                  {running ? (
+                    <span
+                      className={`
+                        text-xs px-3 py-1 rounded-full
+                        ${
+                          washer
+                            ? "bg-blue-100 text-blue-600"
+                            : "bg-orange-100 text-orange-600"
+                        }
+                      `}
+                    >
+                      กำลังทำงาน
+                    </span>
+                  ) : (
+                    <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
+                      พร้อมใช้งาน
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
-
-      {/* name */}
-      <div className="text-center text-sm font-medium">
-        เครื่องซักผ้า No.{String(m.id).padStart(2, "0")}
-      </div>
-
-      {/* time */}
-     {(m.status === "running" || m.status === "paused") && (
-  <div className="text-center text-xs text-gray-500 mt-1">
-    {Math.floor(getRemainingTime(m) / 60)} นาที เหลือ
-  </div>
-)}
-
-      {/* status */}
-      <div className="text-center mt-2">
-        {m.status === "available" && "🔵"}
-        {m.status === "running" && "🟠"}
-        {m.status === "paused" && "⏸️"}
-      </div>
-    </div>
-  ))}
-</div>
     </main>
   );
 }
