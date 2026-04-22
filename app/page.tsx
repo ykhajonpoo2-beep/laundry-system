@@ -132,7 +132,7 @@ export default function HomePage() {
                       กำลังทำงาน
                     </span>
                   ) : (
-                    <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
+                    <span className="bg-gray-500 text-white text-xs px-1 py-1 rounded-full">
                       พร้อมใช้งาน
                     </span>
                   )}
