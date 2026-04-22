@@ -7,13 +7,16 @@ export async function POST(req: Request) {
   const machines = await getMachines();
 
   const updated = machines.map((m: any) => {
-    if (m.id === Number(machineId)) {
-      return {
-        ...m,
-        status: "paused",
-      };
-    }
-    return m;
+    if (m.id !== Number(machineId)) return m;
+
+    const now = Date.now();
+
+return {
+  ...m,
+  status: "paused",
+  remainingTime: m.endTime - now, // 🔥 เก็บเวลาคงเหลือจริง
+  endTime: null,
+};
   });
 
   await saveMachines(updated);

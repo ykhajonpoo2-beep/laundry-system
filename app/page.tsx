@@ -61,26 +61,23 @@ export default function HomePage() {
     </main>
   );
 }
-const formatRemainingTime = (endTime: number | null) => {
-  if (!endTime) return "0 นาที";
-
-  const diff = Math.max(
-    0,
-    Math.floor((endTime - Date.now()) / 1000)
-  );
-
-  const hours = Math.floor(diff / 3600);
-  const minutes = Math.floor((diff % 3600) / 60);
-
-  if (hours > 0) {
-    return `${hours} ชม. ${minutes} นาที`;
+const getRemainingTime = (m: any) => {
+  if (m.status === "paused") {
+    return Math.floor(m.remainingTime / 1000);
   }
 
-  return `${minutes} นาที`;
+  if (m.status === "running") {
+    return Math.max(
+      0,
+      Math.floor((m.endTime - Date.now()) / 1000)
+    );
+  }
+
+  return 0;
 };
   return (
     <main className="min-h-screen bg-gray-100 p-4">
-      <h1>TEST DEPLOY 🔥</h1>
+      <h1>TEST DEPLOY  🔥</h1>
       <h1 className="text-xl font-bold mb-4">
   🧺 Laundry System (NEW UI V2)
 </h1>
@@ -104,11 +101,11 @@ const formatRemainingTime = (endTime: number | null) => {
       </div>
 
       {/* time */}
-      {(m.status === "running" || m.status === "paused") && (
-        <div className="text-center text-xs text-gray-500 mt-1">
-          {formatRemainingTime(m.endTime)} เหลือ
-        </div>
-      )}
+     {(m.status === "running" || m.status === "paused") && (
+  <div className="text-center text-xs text-gray-500 mt-1">
+    {Math.floor(getRemainingTime(m) / 60)} นาที เหลือ
+  </div>
+)}
 
       {/* status */}
       <div className="text-center mt-2">

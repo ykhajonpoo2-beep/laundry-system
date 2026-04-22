@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMachines, saveMachines } from "@/lib/machineDB";
 
-// GET (ESP32 poll)
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const id = Number(searchParams.get("id"));
@@ -19,27 +18,37 @@ export async function GET(req: Request) {
   });
 }
 
-// POST (web send command)
 export async function POST(req: Request) {
-  const { machineId, command, program } = await req.json();
+  const { machineId, command } = await req.json();
 
   const machines = await getMachines();
 
   const updated = machines.map((m: any) => {
-    // ✅ แก้เฉพาะเครื่องเดียว
-    if (m.id === Number(machineId)) {
-      return {
-        ...m,
-        command,
-        program: program ?? m.program,
-      };
-    }
+  if (m.id === machineId) {
+  if (command === "pause") {
+    return {
+      ...m,
+      status: "paused",
+      remainingTime: m.endTime - Date.now(),
+      endTime: null,
+      command,
+    };
+  }
 
-    // ✅ เครื่องอื่น "ห้ามยุ่ง"
-    return m;
+  if (command === "resume") {
+    return {
+      ...m,
+      status: "running",
+      endTime: Date.now() + m.remainingTime,
+      command,
+    };
+  }
+
+  return { ...m, command };
+}
   });
 
   await saveMachines(updated);
 
-  return NextResponse.json({ success: true });
+  return Response.json({ success: true });
 }

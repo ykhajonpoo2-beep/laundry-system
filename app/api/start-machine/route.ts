@@ -6,8 +6,7 @@ import {
 
 export async function POST(req: Request) {
   try {
-    const { machineId, price } =
-      await req.json();
+    const { machineId, price } = await req.json();
 
     const durationMap: any = {
       20: 1800,
@@ -15,39 +14,55 @@ export async function POST(req: Request) {
       40: 5400,
     };
 
-    const duration =
-      durationMap[price] || 1800;
+    const duration = durationMap[price] || 1800;
 
-    const machines =
-      await getMachines();
+    const machines = await getMachines();
 
-    const updated = machines.map(
-      (m: any) =>
-        m.id === Number(machineId)
-          ? {
-              ...m,
-              status: "running",
-              command: "start",
-              program: price,
-              endTime:
-                Date.now() +
-                duration * 1000,
-            }
-          : m
-    );
+    const updated = machines.map((m: any) => {
+      if (m.id !== Number(machineId)) return m;
+
+      // ❗ กันฝาเปิด
+      if (!m.lidClosed) {
+        throw new Error("กรุณาปิดฝาเครื่องก่อน");
+      }
+
+       // 🔥 ถ้า paused → ห้าม overwrite
+    if (m.status === "paused") {
+      return m;
+    }
+
+    return {
+      ...m,
+      status: "running",
+      command: "start",
+      program: price,
+      endTime: Date.now() + duration * 1000,
+    };
+  
+
+      // ❗ กัน start ซ้ำ
+      if (m.status === "running") {
+        throw new Error("เครื่องกำลังทำงาน");
+      }
+
+      // 🔥 start ใหม่
+      return {
+        ...m,
+        status: "running",
+        command: "start",
+        program: price,
+        endTime: Date.now() + duration * 1000,
+      };
+    });
 
     await saveMachines(updated);
 
-    return NextResponse.json({
-      success: true,
-    });
+    return NextResponse.json({ success: true });
+
   } catch (error) {
     return NextResponse.json(
-      {
-        success: false,
-        error: String(error),
-      },
-      { status: 500 }
+      { success: false, error: String(error) },
+      { status: 400 }
     );
   }
 }

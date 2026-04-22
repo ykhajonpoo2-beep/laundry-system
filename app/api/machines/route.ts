@@ -32,7 +32,12 @@ export async function GET() {
         };
       }
     }
-
+if (m.status === "paused") {
+  return {
+    ...m,
+    timeLeft: m.timeLeft || 0,
+  };
+}
     return {
       ...m,
       timeLeft,

@@ -18,7 +18,7 @@ export default function MachinePage() {
 
   const status = machine?.status || "loading";
 
-  useEffect(() => {
+  
     const fetchData = async () => {
       try {
         const res = await fetch("/api/machines");
@@ -40,23 +40,26 @@ export default function MachinePage() {
         setError("โหลดข้อมูลไม่สำเร็จ");
       }
     };
-
+useEffect(() => {
     fetchData();
     const timer = setInterval(fetchData, 2000);
     return () => clearInterval(timer);
   }, [id]);
 
-  const formatRemainingTime = (endTime: number | null) => {
-    if (!endTime) return "0 นาที";
+const getRemainingTime = () => {
+  if (machine.status === "paused") {
+    return Math.floor(machine.remainingTime / 1000);
+  }
 
-    const diff = Math.max(
+  if (machine.status === "running") {
+    return Math.max(
       0,
-      Math.floor((endTime - Date.now()) / 1000)
+      Math.floor((machine.endTime - Date.now()) / 1000)
     );
+  }
 
-    const minutes = Math.floor(diff / 60);
-    return `${minutes} นาที`;
-  };
+  return 0;
+};
 
   // ✅ loading กันพัง
   if (!machine) {
@@ -121,25 +124,31 @@ export default function MachinePage() {
         )}
 
         {/* 🟠 RUNNING */}
- {(status === "running" || status === "paused") && (
-  <div
-    className={`border rounded-xl p-4 mt-3 ${
-      status === "paused" ? "bg-yellow-50" : "bg-gray-50"
-    }`}
-  >
-    {/* 🔥 สถานะ */}
-    <p className="font-semibold">
-      {status === "running" && "🟠 เครื่องกำลังทำงาน"}
-      {status === "paused" && "⏸️ เครื่องหยุดชั่วคราว"}
+{(status === "running" || status === "paused") && (
+  <div className="border rounded-2xl p-4 bg-blue-50 mt-3">
+
+    {/* ✅ เปลี่ยนข้อความตรงนี้ */}
+    <p className="text-center font-medium">
+      {status === "running"
+        ? "กำลังทำงาน"
+        : "หยุดชั่วคราวแล้ว"}
     </p>
 
-    {/* ⏱ เวลา */}
-    <p className="text-sm text-gray-500 mb-3">
-      ⏱ {formatRemainingTime(machine.endTime)}
-    </p>
+    {/* เวลา */}
+  <p className="text-center text-2xl font-bold my-2">
+  {Math.floor(getRemainingTime() / 60)} นาที เหลือ
+</p>
+
+    {/* progress bar */}
+    <div className="w-full bg-gray-200 h-2 rounded-full mb-4">
+      <div
+        className="bg-blue-500 h-2 rounded-full"
+        style={{ width: "70%" }} // (ต่อยอดทำ dynamic ได้)
+      />
+    </div>
 
     {/* 🔘 ปุ่ม */}
-    {status === "running" && (
+    {status === "running" ? (
       <button
         onClick={async () => {
           await fetch("/api/machine-command", {
@@ -150,14 +159,14 @@ export default function MachinePage() {
               command: "pause",
             }),
           });
-        }}
-        className="w-full bg-yellow-500 text-white py-2 rounded-xl"
-      >
-        ⏸️ พักเครื่อง
-      </button>
-    )}
 
-    {status === "paused" && (
+          fetchData(); // รีโหลด
+        }}
+        className="w-full bg-gray-700 text-white py-3 rounded-xl"
+      >
+        ⏸️ หยุดชั่วคราว
+      </button>
+    ) : (
       <button
         onClick={async () => {
           await fetch("/api/machine-command", {
@@ -168,10 +177,12 @@ export default function MachinePage() {
               command: "resume",
             }),
           });
+
+          fetchData();
         }}
-        className="w-full bg-green-600 text-white py-2 rounded-xl"
+        className="w-full bg-gray-700 text-white py-3 rounded-xl"
       >
-        ▶️ ทำงานต่อ
+        ▶️ เริ่มใหม่
       </button>
     )}
   </div>

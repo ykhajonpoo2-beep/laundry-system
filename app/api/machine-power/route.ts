@@ -1,11 +1,6 @@
 import { NextResponse } from "next/server";
 import { getMachines, saveMachines } from "@/lib/machineDB";
 
-// 🔥 เพิ่มตัวนี้เข้าไป
-export async function GET() {
-  return NextResponse.json({ ok: true });
-}
-
 export async function POST(req: Request) {
   const { machineId } = await req.json();
 

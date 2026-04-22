@@ -7,20 +7,13 @@ export async function POST(req: Request) {
   const machines = await getMachines();
 
   const updated = machines.map((m: any) => {
-    if (m.id === Number(machineId)) {
+    if (m.id !== Number(machineId)) return m;
 
-      if (m.status === "running") {
-        return { ...m, status: "paused" };
-      }
-
-      if (m.status === "paused") {
-        return { ...m, status: "running" };
-      }
-
-      return m;
-    }
-
-    return m;
+    return {
+  ...m,
+  status: "running",
+  endTime: Date.now() + m.remainingTime, // 🔥 ต่อเวลาเดิม
+};
   });
 
   await saveMachines(updated);

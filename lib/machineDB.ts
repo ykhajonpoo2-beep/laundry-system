@@ -8,24 +8,31 @@ const redis = createClient({
 if (!redis.isOpen) {
   redis.connect();
 }
-
-const defaultMachines = [
+export type Machine = {
+  id: number;
+  status: "available" | "running" | "paused";
+  command: string;
+  endTime: number | null;
+  lidClosed: boolean;
+  program?: number;
+};
+const defaultMachines: Machine[] = [
   {
-    id: 1,
-    status: "available",
-    command: "none",
-    endTime: null,
-    lidClosed: true, // 👈 เพิ่ม
-  },
-  {
-    id: 2,
+   id: 1,
     status: "available",
     command: "none",
     endTime: null,
     lidClosed: true,
   },
   {
-    id: 3,
+   id: 2,
+    status: "available",
+    command: "none",
+    endTime: null,
+    lidClosed: true,
+  },
+  {
+     id: 3,
     status: "available",
     command: "none",
     endTime: null,
@@ -33,7 +40,7 @@ const defaultMachines = [
   },
 ];
 
-export async function getMachines() {
+export async function getMachines(): Promise<Machine[]> {
   const data = await redis.get("machines");
 
   // ถ้ายังไม่มีข้อมูลใน Redis
@@ -46,7 +53,7 @@ export async function getMachines() {
   const now = Date.now();
 
   // คำนวณเวลาคงเหลือ realtime
-return machines.map((m: any) => ({
+return machines.map((m: Machine) => ({
   ...m,
   lidClosed: m.lidClosed ?? true, // 👈 กัน undefined
   timeLeft: m.endTime
