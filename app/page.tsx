@@ -30,8 +30,13 @@ export default function HomePage() {
       cache: "no-store",
     });
 
-    const data = await res.json();
-    setMachines(data);
+  const data = await res.json();
+
+if (!Array.isArray(data)) {
+  throw new Error("invalid data");
+}
+
+setMachines(data);
   } catch (err) {
     console.error("fetch error", err);
     setError("เซิร์ฟเวอร์ยังไม่พร้อม");

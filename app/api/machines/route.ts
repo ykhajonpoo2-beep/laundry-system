@@ -1,53 +1,63 @@
 import { NextResponse } from "next/server";
 import { getMachines, saveMachines } from "@/lib/machineDB";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
-  let machines = await getMachines();
+  try {
+    let machines = await getMachines();
 
-  const now = Date.now();
+    const now = Date.now();
+    let updated = false;
 
-  let updated = false;
+    machines = machines.map((m: any) => {
+      if (!m) return null;
 
-  machines = machines.map((m: any) => {
-    let timeLeft = 0;
+      let timeLeft = 0;
 
-    if (m.status === "running" && m.endTime) {
-      timeLeft = Math.max(
-        0,
-        Math.floor((m.endTime - now) / 1000)
-      );
+      if (m.status === "running" && m.endTime) {
+        timeLeft = Math.max(
+          0,
+          Math.floor((m.endTime - now) / 1000)
+        );
 
-      // ถ้าหมดเวลาแล้วให้ reset
-      if (timeLeft <= 0) {
-        updated = true;
+        if (timeLeft <= 0) {
+          updated = true;
 
+          return {
+            ...m,
+            status: "available",
+            command: "none",
+            endTime: null,
+            timeLeft: 0,
+          };
+        }
+      }
+
+      if (m.status === "paused") {
         return {
           ...m,
-          status: "available",
-          command: "none",
-          endTime: null,
-          timeLeft: 0,
+          timeLeft: m.remainingTime
+            ? Math.floor(m.remainingTime / 1000)
+            : 0,
         };
       }
+
+      return {
+        ...m,
+        timeLeft,
+      };
+    }).filter(Boolean);
+
+    if (updated) {
+      await saveMachines(machines);
     }
-if (m.status === "paused") {
-  return {
-    ...m,
-    timeLeft: m.timeLeft || 0,
-  };
-}
-    return {
-      ...m,
-      timeLeft,
-    };
-  });
 
-  // save auto reset
-  if (updated) {
-    await saveMachines(machines);
+    return NextResponse.json(machines);
+
+  } catch (err) {
+    console.error("machines API error", err);
+    return NextResponse.json(
+      { error: "server error" },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json(machines);
 }

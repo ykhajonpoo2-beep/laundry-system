@@ -19,25 +19,24 @@ export async function POST(req: Request) {
     const machines = await getMachines();
 
     const updated = machines.map((m: any) => {
-      if (m.id !== Number(machineId)) return m;
+  if (m.id !== Number(machineId)) return m;
 
-      // ❗ กันฝาเปิด
-      if (!m.lidClosed) {
-        throw new Error("กรุณาปิดฝาเครื่องก่อน");
-      }
+  if (!m.lidClosed) {
+    throw new Error("กรุณาปิดฝาเครื่องก่อน");
+  }
 
-       // 🔥 ถ้า paused → ห้าม overwrite
-    if (m.status === "paused") {
-      return m;
-    }
+  if (m.status === "running") {
+    throw new Error("เครื่องกำลังทำงาน");
+  }
 
-    return {
-      ...m,
-      status: "running",
-      command: "start",
-      program: price,
-      endTime: Date.now() + duration * 1000,
-    };
+  return {
+    ...m,
+    status: "running",
+    command: "start",
+    program: price,
+    endTime: Date.now() + duration * 1000,
+  };
+
   
 
       // ❗ กัน start ซ้ำ

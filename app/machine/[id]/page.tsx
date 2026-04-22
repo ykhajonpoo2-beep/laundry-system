@@ -95,7 +95,7 @@ const getRemainingTime = () => {
         {/* 🔴 ฝาไม่ปิด */}
         {status === "available" && !machine.lidClosed && (
           <p className="text-red-500 mb-3">
-            ❗ กรุณาปิดฝาเครื่องก่อน
+            ❗นำผ้าเข้าเครื่อง เติมน้ำยาซัก แล้วปิดฝาเครื่อง 
           </p>
         )}
 
