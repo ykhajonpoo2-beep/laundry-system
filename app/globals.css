@@ -28,3 +28,31 @@ body {
 .animate-drum {
   animation: drum-rotate 4s ease-in-out infinite;
 }
+@keyframes bubble-up {
+  0% {
+    transform: translateY(10px) scale(0.8);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-25px) scale(1.2);
+    opacity: 0;
+  }
+}
+
+.bubble {
+  position: absolute;
+  bottom: 4px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.7);
+  animation: bubble-up 2.5s infinite ease-in;
+}
+.animation-delay-500 {
+  animation-delay: 0.5s;
+}
+
+.animation-delay-1000 {
+  animation-delay: 1s;
+}

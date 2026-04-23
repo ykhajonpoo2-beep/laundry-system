@@ -72,21 +72,34 @@ export default function HomePage() {
               {/* 🔥 รูปเครื่อง */}
               <div className="w-20 h-20 flex items-center justify-center">
                 <div className="relative w-16 h-16 bg-gray-300 rounded-xl flex items-center justify-center">
-  
-              {/* 🔵 ฝาหน้า (glass) */}
-                <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center overflow-hidden">
-               <div className="absolute w-12 h-12 rounded-full border-2 border-white/30"></div>
-              {/* 👕 ผ้าด้านใน */}
-              <div
-  className={`
-    w-8 h-8 rounded-full
-    ${washer 
-      ? "bg-gradient-to-tr from-blue-400 via-purple-400 to-pink-400"
-      : "bg-gradient-to-tr from-orange-400 via-red-400 to-yellow-400"
-    }
-    ${running ? "animate-drum" : ""}
-  `}
-/>
+
+  {/* 🔵 ฝาหน้า */}
+  <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center overflow-hidden relative">
+    <div className="absolute w-12 h-12 rounded-full border border-white/30" />
+    {/* 💦 น้ำ (พื้นหลัง) */}
+    <div className="absolute inset-0 bg-blue-500 opacity-30" />
+    <div className={`absolute inset-0 bg-blue-400 opacity-20 ${running ? "animate-pulse" : ""}`} />
+    {/* 👕 ผ้า */}
+    <div
+      className={`
+        w-8 h-8 rounded-full
+        ${washer 
+          ? "bg-gradient-to-tr from-blue-400 via-purple-400 to-pink-400"
+          : "bg-gradient-to-tr from-orange-400 via-red-400 to-yellow-400"
+        }
+        ${running ? "animate-drum" : ""}
+        opacity-80
+      `}
+    />
+
+    {/* 💧 bubbles */}
+    {running && (
+      <>
+        <div className="bubble w-2 h-2 left-2" />
+        <div className="bubble w-1.5 h-1.5 left-5 animation-delay-500" />
+        <div className="bubble w-2.5 h-2.5 left-7 animation-delay-1000" />
+      </>
+    )}
 
   </div>
 
