@@ -31,11 +31,21 @@ export default function HomePage() {
   }, []);
 
   const getTime = (m: Machine) => {
-    if (m.status === "running" && m.endTime) {
-      return Math.max(0, Math.floor((m.endTime - Date.now()) / 1000));
-    }
-    return 0;
-  };
+  // 🔥 กำลังทำงาน → คิดจาก endTime
+  if (m.status === "running" && m.endTime) {
+    return Math.max(
+      0,
+      Math.floor((m.endTime - Date.now()) / 1000)
+    );
+  }
+
+  // 🔥 หยุดชั่วคราว → ใช้ remainingTime
+  if (m.status === "paused" && m.remainingTime) {
+    return Math.floor(m.remainingTime / 1000);
+  }
+
+  return 0;
+};
 
   const isWasher = (id: number) => id <= 2;
 
