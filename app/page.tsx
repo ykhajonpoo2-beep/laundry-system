@@ -37,7 +37,7 @@ export default function HomePage() {
     return 0;
   };
 
-  const isWasher = (id: number) => id <= 3;
+  const isWasher = (id: number) => id <= 2;
 
   return (
     <main className="min-h-screen bg-gray-200 p-4">
@@ -46,6 +46,7 @@ export default function HomePage() {
       <div className="grid grid-cols-2 gap-4">
         {machines.map((m) => {
           const running = m.status === "running";
+          const paused = m.status === "paused";
           const washer = isWasher(m.id);
 
           return (
@@ -55,7 +56,7 @@ export default function HomePage() {
               className={`
                 rounded-2xl p-4 flex gap-3 items-center cursor-pointer
                 transition-all
-                ${running ? "bg-white" : "bg-gray-600 text-white"}
+                ${running ? "bg-white" : paused ? "bg-yellow-200" : "bg-gray-600 text-white"}
               `}
             >
               {/* 🔥 รูปเครื่อง */}
@@ -99,22 +100,22 @@ export default function HomePage() {
                 </div>
 
                 {/* time */}
-                {running ? (
-                  <div className="text-sm text-gray-500 mt-1 flex items-center gap-1">
-                    🕒 {Math.floor(getTime(m) / 60)
-                      .toString()
-                      .padStart(2, "0")}
-                    :
-                    {(getTime(m) % 60)
-                      .toString()
-                      .padStart(2, "0")}{" "}
-                    เหลือ
+               {(running || paused) ? (
+                <div className="text-sm mt-1 flex items-center gap-1 text-black">
+                🕒 {Math.floor(getTime(m) / 60)
+                    .toString()
+                     .padStart(2, "0")}
+                      :
+                   {(getTime(m) % 60)
+                    .toString()
+                   .padStart(2, "0")}{" "}
+                  เหลือ
+                 </div>
+                  ) : (
+                   <div className="text-sm mt-1 opacity-80">
+                  สแตนด์บาย
                   </div>
-                ) : (
-                  <div className="text-sm mt-1 opacity-80">
-                    สแตนด์บาย
-                  </div>
-                )}
+                 )}
 
                 {/* status button */}
                 <div className="mt-2">
@@ -130,12 +131,16 @@ export default function HomePage() {
                       `}
                     >
                       กำลังทำงาน
+                      </span>
+                       ) : paused ? (
+                        <span className="text-xs px-3 py-1 rounded-full bg-yellow-400 text-black">
+                         หยุดชั่วคราว
                     </span>
-                  ) : (
-                    <span className="bg-gray-500 text-white text-xs px-1 py-1 rounded-full">
+                       ) : (
+                       <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
                       พร้อมใช้งาน
-                    </span>
-                  )}
+                   </span>
+                     )}
                 </div>
               </div>
             </div>
