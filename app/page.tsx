@@ -83,12 +83,12 @@ export default function HomePage() {
                 <img
                   src="/lg-drum.png"
                   className={`
-                    absolute w-[60%] h-[60%] object-contain
+                    absolute w-[100%] h-[100%] object-contain
                     ${running ? "animate-drum" : ""}
                   `}
                   style={{
-                    top: "20%",
-                    left: "20%",
+                    top: "10%",
+                    left: "10%",
                   }}
                 />
 
