@@ -105,14 +105,24 @@ export default function HomePage() {
 />
 </div>
 
-                {/* bubble */}
-              {running && (
+ {/* 💧 ฟอง (ซักผ้า) */}
+{running && washer && (
   <>
     <div className="bubble w-1.5 h-1.5 left-[20%]" />
     <div className="bubble w-2 h-2 left-[35%] animation-delay-500" />
     <div className="bubble w-1 h-1 left-[50%] animation-delay-1000" />
     <div className="bubble w-2.5 h-2.5 left-[65%] animation-delay-700" />
     <div className="bubble w-1.5 h-1.5 left-[80%] animation-delay-1200" />
+  </>
+)}
+{/* ☁️ ไอน้ำ (อบผ้า) */}
+{running && !washer && (
+  <>
+    <div className="steam w-3 h-3 left-[35%]" />
+    <div className="steam w-4 h-4 left-[50%] animation-delay-500" />
+    <div className="steam w-2 h-2 left-[65%] animation-delay-500" />
+    <div className="steam w-4 h-4 left-[70%] animation-delay-500" />
+    <div className="steam w-2 h-2 left-[85%] animation-delay-1000" />
   </>
 )}
               </div>

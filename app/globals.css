@@ -56,3 +56,37 @@ body {
 .animation-delay-1000 {
   animation-delay: 1s;
 }
+/* ☁️ ไอน้ำลอย */
+@keyframes steam-rise {
+  0% {
+    transform: translateY(10px) scale(0.8);
+    opacity: 0;
+    filter: blur(2px);
+  }
+  30% {
+    opacity: 0.4;
+  }
+  60% {
+    opacity: 0.25;
+  }
+  100% {
+    transform: translateY(-60px) scale(1.4);
+    opacity: 0;
+    filter: blur(3px);
+  }
+}
+
+.steam {
+  position: absolute;
+  Bottom: 10px;
+  border-radius: 9999px;
+  background: rgba(255,255,255,0.25);
+  animation: steam-rise 2s infinite ease-out;
+  pointer-events: none;
+}
+.animation-delay-500 {
+  animation-delay: 0.5s;
+}
+.animation-delay-1000 {
+  animation-delay: 1s;
+}
