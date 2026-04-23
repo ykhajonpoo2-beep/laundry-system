@@ -24,3 +24,12 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+@keyframes drum-rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 🔥 หมุนช้าเหมือนเครื่องจริง */
+.animate-drum {
+  animation: drum-rotate 4s ease-in-out infinite;
+}

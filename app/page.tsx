@@ -66,23 +66,33 @@ export default function HomePage() {
               className={`
                 rounded-2xl p-4 flex gap-3 items-center cursor-pointer
                 transition-all
-                ${running ? "bg-white" : paused ? "bg-yellow-200" : "bg-gray-600 text-white"}
+                ${running ? "bg-white" : paused ? "bg-yellow-200" : "bg-gray-400 text-white"}
               `}
             >
               {/* 🔥 รูปเครื่อง */}
               <div className="w-20 h-20 flex items-center justify-center">
-                <div className="relative">
-                  <div className="w-16 h-16 bg-gray-300 rounded-xl flex items-center justify-center">
-                    {/* drum */}
-                    <div
-                      className={`
-                        w-10 h-10 rounded-full
-                        ${washer ? "bg-blue-400" : "bg-orange-400"}
-                        ${running ? "animate-spin" : ""}
-                      `}
-                    />
-                  </div>
-                </div>
+                <div className="relative w-16 h-16 bg-gray-300 rounded-xl flex items-center justify-center">
+  
+  {/* 🔵 ฝาหน้า (glass) */}
+  <div className="w-12 h-12 bg-black rounded-full flex items-center justify-center overflow-hidden">
+    <div className="absolute w-12 h-12 rounded-full border-2 border-white/30"></div>
+    {/* 👕 ผ้าด้านใน */}
+    <div
+      className={`
+        w-8 h-8 rounded-full
+        bg-gradient-to-tr from-blue-400 via-purple-400 to-pink-400
+        opacity-80
+        ${washer 
+  ? "bg-gradient-to-tr from-blue-400 via-purple-400 to-pink-400"
+  : "bg-gradient-to-tr from-orange-400 via-red-400 to-yellow-400"
+}
+        ${running ? "animate-drum" : ""}
+      `}
+    />
+
+  </div>
+
+</div>
               </div>
 
               {/* 🔥 ข้อมูล */}
