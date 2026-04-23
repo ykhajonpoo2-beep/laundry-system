@@ -77,29 +77,44 @@ export default function HomePage() {
                 <img
                   src="/lg-full.png"
                   className="absolute w-full h-full object-contain"
+                  
                 />
 
                 {/* ถัง */}
-                <img
-                  src="/lg-drum.png"
-                  className={`
-                    absolute w-[100%] h-[100%] object-contain
-                    ${running ? "animate-drum" : ""}
-                  `}
-                  style={{
-                    top: "10%",
-                    left: "10%",
-                  }}
-                />
+<div className="absolute w-[100%] h-[100%]"
+
+     style={{
+       top: "48%",
+       left: "50%",
+       transform: "translate(-50%, -50%)"
+     }}>
+     
+  <img
+  src="/lg-drum.png"
+  className={`
+    absolute object-contain
+    ${running ? "animate-drum" : ""}
+  `}
+  style={{
+    width: "100px",
+    height: "100px",
+    top: "-7.8px",
+    left: "-0.3px",
+    transformOrigin: "50% 46%", // 👈 สำคัญมาก
+  }}
+/>
+</div>
 
                 {/* bubble */}
-                {running && (
-                  <>
-                    <div className="bubble w-2 h-2 left-[40%]" />
-                    <div className="bubble w-1.5 h-1.5 left-[50%] animation-delay-500" />
-                    <div className="bubble w-2 h-2 left-[60%] animation-delay-1000" />
-                  </>
-                )}
+              {running && (
+  <>
+    <div className="bubble w-1.5 h-1.5 left-[20%]" />
+    <div className="bubble w-2 h-2 left-[35%] animation-delay-500" />
+    <div className="bubble w-1 h-1 left-[50%] animation-delay-1000" />
+    <div className="bubble w-2.5 h-2.5 left-[65%] animation-delay-700" />
+    <div className="bubble w-1.5 h-1.5 left-[80%] animation-delay-1200" />
+  </>
+)}
               </div>
 
               {/* 🔥 ข้อมูล */}

@@ -26,7 +26,7 @@ body {
 
 /* 🔥 หมุนช้าเหมือนเครื่องจริง */
 .animate-drum {
-  animation: drum-rotate 6s linear infinite;
+  animation: drum-rotate 4s linear infinite;
 }
 @keyframes bubble-up {
   0% {
@@ -44,7 +44,7 @@ body {
 
 .bubble {
   position: absolute;
-  bottom: 4px;
+  bottom: 30px;
   border-radius: 9999px;
   background: rgba(255,255,255,0.7);
   animation: bubble-up 2.5s infinite ease-in;
