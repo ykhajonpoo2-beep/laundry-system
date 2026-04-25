@@ -13,63 +13,154 @@ export default function MachinePage() {
   const { id } = useParams();
   const router = useRouter();
 
+  // ✅ state ทั้งหมดอยู่บนสุด
   const [machine, setMachine] = useState<any>(null);
   const [error, setError] = useState("");
 
+  const [phone, setPhone] = useState("");
+  const [points, setPoints] = useState(0);
+  const [canRedeem, setCanRedeem] = useState(false);
+
   const status = machine?.status || "loading";
+  const [showPhonePopup, setShowPhonePopup] = useState(false);
+  const [alreadyAsked, setAlreadyAsked] = useState(false);
+  // ✅ function
+  const checkPoints = async () => {
+    const res = await fetch(`/api/points?phone=${phone}`);
+    const data = await res.json();
 
-  
-    const fetchData = async () => {
-      try {
-        const res = await fetch("/api/machines");
-        const machines = await res.json();
+    setPoints(data.points);
+    setCanRedeem(data.canRedeem);
+  };
 
-        const m = machines.find(
-          (m: any) => Number(m.id) === Number(id)
-        );
+const fetchData = async () => {
+  try {
+    const res = await fetch("/api/machines", {
+      cache: "no-store",
+    });
 
-        if (!m) {
-          setError("ไม่พบเครื่อง");
-          return;
-        }
+    if (!res.ok) {
+      throw new Error("API error");
+    }
 
-        setMachine(m);
-        setError("");
-      } catch (err) {
-        console.error(err);
-        setError("โหลดข้อมูลไม่สำเร็จ");
-      }
-    };
-useEffect(() => {
-    fetchData();
-    const timer = setInterval(fetchData, 2000);
-    return () => clearInterval(timer);
-  }, [id]);
+    const machines = await res.json();
 
-const getRemainingTime = () => {
-  if (machine.status === "paused") {
-    return Math.floor(machine.remainingTime / 1000);
-  }
-
-  if (machine.status === "running") {
-    return Math.max(
-      0,
-      Math.floor((machine.endTime - Date.now()) / 1000)
+    const m = machines.find(
+      (m: any) => Number(m.id) === Number(id)
     );
-  }
 
-  return 0;
+    setMachine(m);
+  } catch (err) {
+    console.error("fetch machine error:", err);
+  }
 };
 
-  // ✅ loading กันพัง
-  if (!machine) {
-    return <p className="p-4">⏳ กำลังโหลด...</p>;
+  const getRemainingTime = () => {
+    if (machine?.status === "paused") {
+      return Math.floor(machine.remainingTime / 1000);
+    }
+
+    if (machine?.status === "running") {
+      return Math.max(
+        0,
+        Math.floor((machine.endTime - Date.now()) / 1000)
+      );
+    }
+
+    return 0;
+  };
+
+  // ✅ useEffect ทั้งหมดต้องอยู่ตรงนี้ (ก่อน return)
+ useEffect(() => {
+  let mounted = true;
+
+  const fetchData = async () => {
+    try {
+      const res = await fetch("/api/machines");
+      const data = await res.json();
+
+      if (!mounted) return;
+
+      const m = data.find(
+        (m: any) => Number(m.id) === Number(id)
+      );
+
+      setMachine(m);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  fetchData();
+  const timer = setInterval(fetchData, 3000);
+
+  return () => {
+    mounted = false;
+    clearInterval(timer);
+  };
+}, [id]);
+
+  useEffect(() => {
+    if (phone.length === 10) {
+      checkPoints();
+    }
+  }, [phone]);
+
+  // ✅ ค่อย return ทีหลัง
+  // ✅ hook ต้องอยู่ก่อน
+  useEffect(() => {
+  if (!machine) return;
+
+  // ✅ เงื่อนไข popup
+  if (
+    machine.status === "running" &&
+    !alreadyAsked
+  ) {
+    setShowPhonePopup(true);
+    setAlreadyAsked(true);
   }
+}, [machine]);
+useEffect(() => {
+  if (!machine) return;
+
+  const key = `asked-${machine.id}-${machine.endTime}`;
+  const already = localStorage.getItem(key);
+
+  if (machine.status === "running" && !already) {
+    setShowPhonePopup(true);
+    localStorage.setItem(key, "true");
+  }
+}, [machine]);
+
+// ✅ ค่อย return ทีหลัง
+if (!machine) {
+  return <p className="p-4">⏳ กำลังโหลด...</p>;
+}
+  
 
   return (
     <main className="min-h-screen bg-gray-100 p-3">
       <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-5">
+<input
+  value={phone}
+  onChange={(e) => setPhone(e.target.value)}
+  placeholder="เบอร์โทร"
+  className="w-full border p-2 rounded"
+/>
 
+<button onClick={checkPoints}>
+  กรอกเบอร์โทร 10 หลักติดกัน เพื่อเช็คแต้ม
+</button>
+
+<p>
+  แต้ม: {points} / 1  
+  {points < 1 && ` (เหลือ ${1 - points} ครั้ง)`}
+</p>
+{canRedeem && (
+  <div className="bg-green-100 text-green-700 p-2 rounded mt-2">
+    🎉 คุณมีสิทธิซักฟรีแล้ว!
+  </div>
+)}
         <button
           onClick={() => router.push("/")}
           className="mb-4 text-sm"
@@ -117,6 +208,13 @@ const getRemainingTime = () => {
                 </div>
                 <div className="text-sm text-gray-500">
                   {program.duration} • {program.price} บาท
+                  {program.id === 1 && canRedeem ? (
+  <span className="text-green-600 font-bold">
+    ฟรี 🎉
+  </span>
+) : (
+  <span>{program.price} บาท</span>
+)}
                 </div>
               </button>
             ))}
@@ -187,7 +285,55 @@ const getRemainingTime = () => {
     )}
   </div>
 )}
+{showPhonePopup && (
+  <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="bg-white p-5 rounded-xl w-80 text-center">
 
+      <p className="mb-2 font-semibold">
+        🎉 รับแต้มสะสม
+      </p>
+
+      <input
+        value={phone}
+        onChange={(e) => setPhone(e.target.value)}
+        placeholder="กรอกเบอร์โทร"
+        className="border w-full p-2 mb-3"
+      />
+
+      <button
+        onClick={async () => {
+          if (phone) {
+            await fetch("/api/points", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ phone }),
+            });
+          }
+
+          setShowPhonePopup(false);
+        }}
+        className="bg-black text-white w-full py-2 mb-2 rounded"
+      >
+        ยืนยันรับแต้ม
+      </button>
+
+      <button
+        onClick={() => setShowPhonePopup(false)}
+        className="text-gray-500 text-sm"
+      >
+        ไม่รับแต้ม
+      </button>
+      {machine.status === "running" && (
+  <button
+    onClick={() => setShowPhonePopup(true)}
+    className="mt-3 text-blue-600 underline text-sm"
+  >
+    + รับแต้มสะสม
+  </button>
+)}
+    </div>
+  </div>
+)}
       </div>
     </main>
   );
