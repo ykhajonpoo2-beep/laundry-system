@@ -6,7 +6,7 @@ import {
 
 export async function POST(req: Request) {
   try {
-    const { machineId, price } = await req.json();
+    const { machineId, price, isFree } = await req.json(); // ✅ เพิ่ม isFree
 
     const durationMap: any = {
       20: 1800,
@@ -19,38 +19,27 @@ export async function POST(req: Request) {
     const machines = await getMachines();
 
     const updated = machines.map((m: any) => {
-  if (m.id !== Number(machineId)) return m;
+      if (m.id !== Number(machineId)) return m;
 
-  if (!m.lidClosed) {
-    throw new Error("กรุณาปิดฝาเครื่องก่อน");
-  }
+      // ❗ validation
+      if (!m.lidClosed) {
+        throw new Error("กรุณาปิดฝาเครื่องก่อน");
+      }
 
-  if (m.status === "running") {
-    throw new Error("เครื่องกำลังทำงาน");
-  }
-
-  return {
-    ...m,
-    status: "running",
-    command: "start",
-    program: price,
-    endTime: Date.now() + duration * 1000,
-  };
-
-  
-
-      // ❗ กัน start ซ้ำ
       if (m.status === "running") {
         throw new Error("เครื่องกำลังทำงาน");
       }
 
-      // 🔥 start ใหม่
+      // ✅ start machine
       return {
         ...m,
         status: "running",
         command: "start",
         program: price,
         endTime: Date.now() + duration * 1000,
+
+        // ⭐ ตัวสำคัญ
+        isFree: isFree || false,
       };
     });
 

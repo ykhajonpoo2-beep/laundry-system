@@ -34,6 +34,20 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   // ----------------------
   // TIMER
   // ----------------------
+  const saveQR = async () => {
+  const element = document.getElementById("qr-area");
+
+  if (!element) return;
+
+  const html2canvas = (await import("html2canvas")).default;
+
+  const canvas = await html2canvas(element);
+
+  const link = document.createElement("a");
+  link.download = `qr-machine-${id}.png`;
+  link.href = canvas.toDataURL();
+  link.click();
+};
   useEffect(() => {
     if (paid) return;
 
@@ -98,10 +112,11 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        machineId: Number(id),
-        price: program.price,
-      }),
+    body: JSON.stringify({
+  machineId: Number(id),
+  price: program.price,
+  isFree: false, // ✅
+}),
     });
 
     if (!res.ok) throw new Error();
@@ -130,14 +145,15 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
         }),
       });
 
-      await fetch("/api/start-machine", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          machineId: Number(id),
-          price: 0,
-        }),
-      });
+ await fetch("/api/start-machine", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    machineId: Number(id),
+    price: 0,
+    isFree: true, // ✅ เพิ่มตรงนี้
+  }),
+});
 
       alert("ใช้ฟรีสำเร็จ 🎉");
       router.push(`/machine/${id}`);
@@ -175,15 +191,26 @@ useEffect(() => {
 
   return () => clearInterval(i);
 }, [paid, id]);
+useEffect(() => {
+  const saved = localStorage.getItem("phone");
+  if (saved) {
+    setPhone(saved);
+
+    fetch(`/api/points?phone=${saved}`)
+      .then(res => res.json())
+      .then(data => setCanRedeem(data.canRedeem));
+  }
+}, []);
   return (
     <main className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow">
 <button
-          onClick={() => router.push("/")}
-          className="mb-4 text-sm"
-        >
-          ← กลับหน้าแรก
-        </button>
+
+  onClick={() => router.back()}
+  className="mb-4 text-sm"
+>
+  ← ย้อนกลับ
+</button>
         {!lidClosed && (
           <p className="text-red-500 mb-2 font-bold">
             ❗ กรุณาปิดฝาเครื่อง
@@ -199,39 +226,28 @@ useEffect(() => {
 
         {/* QR */}
         {lidClosed ? (
-          <div className="border-2 border-dashed h-60 flex items-center justify-center mb-4">
-            QR CODE
-          </div>
+        <div
+  id="qr-area"
+  className="border-2 border-dashed h-60 flex items-center justify-center mb-4"
+>
+  QR CODE
+</div>
         ) : (
           <div className="border-2 h-60 flex items-center justify-center mb-4 bg-gray-100">
             ❌ QR ไม่แสดง
           </div>
         )}
 
-        {/* INPUT PHONE */}
-        <input
-          value={phone}
-          onChange={(e) => setPhone(e.target.value)}
-          placeholder="กรอกเบอร์รับแต้ม"
-          className="w-full border p-2 rounded mb-2"
-        />
-
-        <button
-          onClick={checkPoints}
-          className="w-full bg-blue-500 text-white py-2 rounded mb-3"
-        >
-          เช็คสิทธิ
-        </button>
-
+<button
+  onClick={saveQR}
+  className="w-full bg-blue-500 text-white py-2 rounded mb-3"
+>
+  💾 บันทึก QR
+</button>
+<p className="text-xs text-gray-500 text-center mb-2">
+  📥 กดบันทึก QR เพื่อใช้ชำระภายหลัง
+</p>
         {/* REDEEM */}
-        {canRedeem && (
-          <button
-            onClick={redeem}
-            className="w-full bg-green-500 text-white py-3 rounded-xl mb-3"
-          >
-            🎁 ใช้สิทธิซักฟรี
-          </button>
-        )}
 {isProgram1 && canRedeem && (
   <button
     onClick={redeem}
@@ -256,35 +272,7 @@ useEffect(() => {
     ⏳ กำลังตรวจสอบการชำระเงิน...
   </p>
 )}
-{showPhonePopup && (
-  <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-    <div className="bg-white p-5 rounded-xl w-80">
-      <p className="mb-2">รับแต้มสะสม</p>
 
-      <input
-        value={phone}
-        onChange={(e) => setPhone(e.target.value)}
-        className="border w-full p-2 mb-3"
-      />
-
-      <button
-        onClick={submitPhone}
-        className="bg-black text-white w-full py-2"
-      >
-        ยืนยัน
-      </button>
-      <button
-  onClick={() => {
-    setShowPhonePopup(false);
-    router.push(`/machine/${id}`);
-  }}
-  className="text-gray-500 text-sm mt-2"
->
-  ไม่รับแต้ม
-</button>
-    </div>
-  </div>
-)}
       </div>
     </main>
   );

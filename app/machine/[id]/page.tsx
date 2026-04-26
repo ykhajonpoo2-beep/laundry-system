@@ -23,7 +23,7 @@ export default function MachinePage() {
 
   const status = machine?.status || "loading";
   const [showPhonePopup, setShowPhonePopup] = useState(false);
-  const [alreadyAsked, setAlreadyAsked] = useState(false);
+ 
   // ✅ function
   const checkPoints = async () => {
     const res = await fetch(`/api/points?phone=${phone}`);
@@ -69,7 +69,22 @@ const fetchData = async () => {
 
     return 0;
   };
+const claimPoint = async () => {
+  if (!phone || !machine) return;
 
+  await fetch("/api/points", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phone,
+      machineId: machine.id,
+      startTime: machine.endTime,
+    }),
+  });
+
+  await checkPoints(); // ✅ สำคัญมาก
+  setShowPhonePopup(false);
+};
   // ✅ useEffect ทั้งหมดต้องอยู่ตรงนี้ (ก่อน return)
  useEffect(() => {
   let mounted = true;
@@ -99,7 +114,16 @@ const fetchData = async () => {
     clearInterval(timer);
   };
 }, [id]);
+useEffect(() => {
+  const saved = localStorage.getItem("phone");
+  if (saved) setPhone(saved);
+}, []);
 
+useEffect(() => {
+  if (phone.length === 10) {
+    localStorage.setItem("phone", phone);
+  }
+}, [phone]);
   useEffect(() => {
     if (phone.length === 10) {
       checkPoints();
@@ -108,25 +132,21 @@ const fetchData = async () => {
 
   // ✅ ค่อย return ทีหลัง
   // ✅ hook ต้องอยู่ก่อน
-  useEffect(() => {
-  if (!machine) return;
-
-  // ✅ เงื่อนไข popup
-  if (
-    machine.status === "running" &&
-    !alreadyAsked
-  ) {
-    setShowPhonePopup(true);
-    setAlreadyAsked(true);
-  }
-}, [machine]);
 useEffect(() => {
   if (!machine) return;
 
   const key = `asked-${machine.id}-${machine.endTime}`;
   const already = localStorage.getItem(key);
 
-  if (machine.status === "running" && !already) {
+  // ❌ ของเดิม
+  // if (machine.status === "running" && !already)
+
+  // ✅ ของใหม่
+  if (
+    machine.status === "running" &&
+    !machine.isFree &&   // ⭐ ห้ามเด้งถ้าใช้ฟรี
+    !already
+  ) {
     setShowPhonePopup(true);
     localStorage.setItem(key, "true");
   }
@@ -153,8 +173,8 @@ if (!machine) {
 </button>
 
 <p>
-  แต้ม: {points} / 1  
-  {points < 1 && ` (เหลือ ${1 - points} ครั้ง)`}
+  แต้ม: {points} / 5  
+  {points < 5 && ` (เหลือ ${5 - points} ครั้ง)`}
 </p>
 {canRedeem && (
   <div className="bg-green-100 text-green-700 p-2 rounded mt-2">
@@ -301,17 +321,7 @@ if (!machine) {
       />
 
       <button
-        onClick={async () => {
-          if (phone) {
-            await fetch("/api/points", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ phone }),
-            });
-          }
-
-          setShowPhonePopup(false);
-        }}
+        onClick={claimPoint}
         className="bg-black text-white w-full py-2 mb-2 rounded"
       >
         ยืนยันรับแต้ม
@@ -321,19 +331,13 @@ if (!machine) {
         onClick={() => setShowPhonePopup(false)}
         className="text-gray-500 text-sm"
       >
-        ไม่รับแต้ม
+        ❗กดปิดไม่รับแต้ม
       </button>
-      {machine.status === "running" && (
-  <button
-    onClick={() => setShowPhonePopup(true)}
-    className="mt-3 text-blue-600 underline text-sm"
-  >
-    + รับแต้มสะสม
-  </button>
-)}
+
     </div>
   </div>
-)}
+)} 
+
       </div>
     </main>
   );

@@ -11,8 +11,8 @@ type Customer = {
 // 🔥 mock database (เปลี่ยนเป็น DB จริงทีหลัง)
 const db: Record<string, Customer> = {};
 
-const MAX_POINTS = 10;
-
+const MAX_POINTS = 1;
+const claimed: Record<string, boolean> = {};
 // ----------------------
 // GET → เช็คแต้ม
 // ----------------------
@@ -37,7 +37,8 @@ export async function GET(req: Request) {
     phone,
     points: user.points,
     remain: Math.max(0, MAX_POINTS - user.points),
-    canRedeem: user.points >= MAX_POINTS,
+   
+    canRedeem: user.points >= MAX_POINTS
   });
 }
 
@@ -46,14 +47,28 @@ export async function GET(req: Request) {
 // ----------------------
 export async function POST(req: Request) {
   const body = await req.json();
-  const { phone } = body;
+  const { phone, machineId, startTime } = body;
 
-  if (!phone) {
+  if (!phone || !machineId || !startTime) {
     return NextResponse.json(
-      { error: "phone required" },
+      { error: "missing data" },
       { status: 400 }
     );
   }
+
+  // 🔥 unique key ต่อรอบการซัก
+  const key = `${machineId}-${startTime}`;
+
+  // ❌ ถ้าเคยได้แต้มแล้ว
+  if (claimed[key]) {
+    return NextResponse.json(
+      { error: "already claimed" },
+      { status: 400 }
+    );
+  }
+
+  // ✅ mark ว่าใช้แล้ว
+  claimed[key] = true;
 
   let user = db[phone];
 
@@ -67,7 +82,6 @@ export async function POST(req: Request) {
 
   user.points += 1;
   user.updatedAt = Date.now();
-
   db[phone] = user;
 
   return NextResponse.json({
@@ -118,4 +132,5 @@ export async function PUT(req: Request) {
     message: "redeemed",
     points: 0,
   });
+  
 }

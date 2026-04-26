@@ -20,6 +20,8 @@ export async function POST(req: Request) {
             command: "none",
             endTime: null,
             program: null,
+             // ⭐ ใส่ตรงนี้
+        isFree: false,
           }
         : m
   );
