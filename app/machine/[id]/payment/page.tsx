@@ -6,7 +6,7 @@ import {
   useRouter,
   useSearchParams,
 } from "next/navigation";
-
+import { useRef } from "react";
 const programs: Record<string, any> = {
   "1": { name: "ซักด่วน", price: 20, duration: 1800 },
   "2": { name: "ซักด่วน น้ำอุ่น", price: 30, duration: 2220 },
@@ -27,7 +27,7 @@ const [lidClosed, setLidClosed] = useState(false);
 
 const [phone, setPhone] = useState("");
 const [canRedeem, setCanRedeem] = useState(false);
-
+const [waitingPayment, setWaitingPayment] = useState(true);
 // ✅ เพิ่มตรงนี้
 const [showPhonePopup, setShowPhonePopup] = useState(false);
   const isProgram1 = programId === "1";
@@ -67,6 +67,7 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   // ----------------------
   // CHECK LID
   // ----------------------
+  
   useEffect(() => {
     const fetchStatus = async () => {
       const res = await fetch("/api/machines", {
@@ -105,28 +106,23 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   // ----------------------
   const confirmPayment = async () => {
   try {
-    setPaid(true);
-
     const res = await fetch("/api/start-machine", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-    body: JSON.stringify({
-  machineId: Number(id),
-  price: program.price,
-  isFree: false, // ✅
-}),
+      body: JSON.stringify({
+        machineId: Number(id),
+        price: program.price,
+        isFree: false,
+      }),
     });
 
     if (!res.ok) throw new Error();
 
-    // ❌ ลบ 2 บรรทัดนี้
-    // alert("ชำระเงินสำเร็จ 🎉");
-    // router.push(`/machine/${id}`);
+    setPaid(true); // ✅ ย้ายมาหลังสำเร็จ
 
-  } catch (err) {
-    setPaid(false);
+  } catch {
     alert("ผิดพลาด");
   }
 };
@@ -175,7 +171,7 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   router.push(`/machine/${id}`);
 };
 useEffect(() => {
-  if (!paid) return; // ✅ สำคัญมาก
+  if (!paid) return;
 
   const i = setInterval(async () => {
     const res = await fetch(`/api/machines`);
@@ -184,8 +180,8 @@ useEffect(() => {
     const m = data.find((m: any) => m.id == id);
 
     if (m.status === "running") {
-      setShowPhonePopup(true);
-      clearInterval(i); // ✅ กันยิงซ้ำ
+      router.push(`/machine/${id}`); // 🔥 สำคัญ
+      clearInterval(i);
     }
   }, 2000);
 
@@ -201,12 +197,38 @@ useEffect(() => {
       .then(data => setCanRedeem(data.canRedeem));
   }
 }, []);
+const startTimeRef = useRef<number>(
+  Number(searchParams.get("t")) || Date.now()
+);
+const startTime = Number(searchParams.get("t")) || Date.now();
+const duration = 60000; // 60 วิ
+
+useEffect(() => {
+  if (!searchParams.get("t")) {
+    router.replace(
+      `/machine/${id}/payment?program=${programId}&t=${Date.now()}`
+    );
+  }
+}, []);
+useEffect(() => {
+  const timer = setInterval(() => {
+    const diff = Math.floor((startTime + duration - Date.now()) / 1000);
+
+    if (diff <= 0) {
+      router.push(`/machine/${id}`);
+    } else {
+      setTimeLeft(diff);
+    }
+  }, 1000);
+
+  return () => clearInterval(timer);
+}, []);
   return (
     <main className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow">
 <button
 
-  onClick={() => router.back()}
+  onClick={() => router.push(`/machine/${id}?from=payment`)}
   className="mb-4 text-sm"
 >
   ← ย้อนกลับ
@@ -267,9 +289,9 @@ useEffect(() => {
         >
           {paid ? "กำลังดำเนินการ..." : "ฉันชำระแล้ว"}
         </button>
-        {paid && !showPhonePopup && (
-  <p className="text-center text-blue-500">
-    ⏳ กำลังตรวจสอบการชำระเงิน...
+{waitingPayment && !paid && (
+  <p className="text-yellow-500 text-center">
+    ⏳ รอการชำระเงิน...
   </p>
 )}
 

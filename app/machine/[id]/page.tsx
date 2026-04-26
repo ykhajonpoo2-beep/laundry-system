@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-
+import { useSearchParams } from "next/navigation";
 const programs = [
   { id: 1, name: "ซักด่วน", duration: "30 นาที", price: 20 },
   { id: 2, name: "ซักด่วน น้ำอุ่น", duration: "37 นาที", price: 30 },
@@ -23,7 +23,9 @@ export default function MachinePage() {
 
   const status = machine?.status || "loading";
   const [showPhonePopup, setShowPhonePopup] = useState(false);
- 
+ const searchParams = useSearchParams();
+const fromPayment = searchParams.get("from") === "payment";
+
   // ✅ function
   const checkPoints = async () => {
     const res = await fetch(`/api/points?phone=${phone}`);
@@ -135,20 +137,23 @@ useEffect(() => {
 useEffect(() => {
   if (!machine) return;
 
-  const key = `asked-${machine.id}-${machine.endTime}`;
+  const key = `popup-${machine.id}`;
   const already = localStorage.getItem(key);
 
-  // ❌ ของเดิม
-  // if (machine.status === "running" && !already)
-
-  // ✅ ของใหม่
   if (
     machine.status === "running" &&
-    !machine.isFree &&   // ⭐ ห้ามเด้งถ้าใช้ฟรี
+    !machine.isFree &&
+    machine.program > 0 &&
+    machine.endTime &&
     !already
   ) {
     setShowPhonePopup(true);
     localStorage.setItem(key, "true");
+  }
+}, [machine]);
+useEffect(() => {
+  if (machine?.status === "available") {
+    localStorage.removeItem(`popup-${machine.id}`);
   }
 }, [machine]);
 
@@ -156,9 +161,10 @@ useEffect(() => {
 if (!machine) {
   return <p className="p-4">⏳ กำลังโหลด...</p>;
 }
-  
+
 
   return (
+    
     <main className="min-h-screen bg-gray-100 p-3">
       <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-5">
 <input

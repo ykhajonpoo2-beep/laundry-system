@@ -39,7 +39,8 @@ export async function POST(req: Request) {
         endTime: Date.now() + duration * 1000,
 
         // ⭐ ตัวสำคัญ
-        isFree: isFree || false,
+        isFree: Boolean(isFree),
+        
       };
     });
 
