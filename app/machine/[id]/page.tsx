@@ -139,19 +139,32 @@ useEffect(() => {
 useEffect(() => {
   if (!machine) return;
 
-  const key = `popup-${machine.id}`;
-  const already = localStorage.getItem(key);
+  const checkPopup = async () => {
+    const res = await fetch("/api/points/check-claim", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        machineId: machine.id,
+        startTime: machine.endTime,
+      }),
+    });
 
-  if (
-    machine.status === "running" &&
-    !machine.isFree &&
-    machine.program > 0 &&
-    machine.endTime &&
-    !already
-  ) {
-    setShowPhonePopup(true);
-    localStorage.setItem(key, "true");
-  }
+    const data = await res.json();
+
+    if (
+      machine.status === "running" &&
+      !machine.isFree &&
+      machine.program > 0 &&
+      machine.endTime &&
+      !data.alreadyClaimed // 🔥 สำคัญ
+    ) {
+      setShowPhonePopup(true);
+    }
+  };
+
+  checkPopup();
 }, [machine]);
 useEffect(() => {
   if (machine?.status === "available") {
