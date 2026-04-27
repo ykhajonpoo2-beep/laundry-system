@@ -122,15 +122,15 @@ export async function PUT(req: Request) {
     );
   }
 
-  // ✅ รีเซ็ตแต้ม
-  user.points = 0;
-  user.updatedAt = Date.now();
+  // ✅ หักแต้มตามสิทธิ (ไม่ reset)
+  user.points -= MAX_POINTS;
 
+  user.updatedAt = Date.now();
   db[phone] = user;
 
   return NextResponse.json({
     message: "redeemed",
-    points: 0,
+    points: user.points,
+    remain: Math.max(0, MAX_POINTS - user.points),
   });
-  
 }

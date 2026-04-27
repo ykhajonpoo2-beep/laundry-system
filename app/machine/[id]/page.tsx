@@ -26,14 +26,23 @@ export default function MachinePage() {
  const searchParams = useSearchParams();
 const fromPayment = searchParams.get("from") === "payment";
 
+const [displayPhone, setDisplayPhone] = useState("");
   // ✅ function
-  const checkPoints = async () => {
-    const res = await fetch(`/api/points?phone=${phone}`);
-    const data = await res.json();
+const checkPoints = async () => {
+  if (phone.length !== 10) {
+    alert("กรุณากรอกเบอร์ 10 หลัก");
+    return;
+  }
 
-    setPoints(data.points);
-    setCanRedeem(data.canRedeem);
-  };
+  const res = await fetch(`/api/points?phone=${phone}`);
+  const data = await res.json();
+
+  setPoints(data.points);
+  setCanRedeem(data.canRedeem);
+
+  setDisplayPhone(phone); // แสดงผล
+  setPhone("");           // 🔥 ล้างช่องทันที
+};
 
 const fetchData = async () => {
   try {
@@ -116,21 +125,14 @@ const claimPoint = async () => {
     clearInterval(timer);
   };
 }, [id]);
-useEffect(() => {
-  const saved = localStorage.getItem("phone");
-  if (saved) setPhone(saved);
-}, []);
+
 
 useEffect(() => {
   if (phone.length === 10) {
     localStorage.setItem("phone", phone);
   }
 }, [phone]);
-  useEffect(() => {
-    if (phone.length === 10) {
-      checkPoints();
-    }
-  }, [phone]);
+
 
   // ✅ ค่อย return ทีหลัง
   // ✅ hook ต้องอยู่ก่อน
@@ -167,26 +169,42 @@ if (!machine) {
     
     <main className="min-h-screen bg-gray-100 p-3">
       <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-5">
+
+  {/* 🔹 input + ปุ่ม (แสดงตลอด) */}
 <input
   value={phone}
   onChange={(e) => setPhone(e.target.value)}
-  placeholder="เบอร์โทร"
-  className="w-full border p-2 rounded"
+  placeholder="กรอกเบอร์โทร 10 หลัก"
+  className="w-full border p-2 rounded mb-2"
 />
 
-<button onClick={checkPoints}>
-  กรอกเบอร์โทร 10 หลักติดกัน เพื่อเช็คแต้ม
+<button
+  onClick={checkPoints}
+  className="w-full bg-blue-600 text-white py-2 rounded"
+>
+  เช็คแต้ม
 </button>
 
-<p>
-  แต้ม: {points} / 5  
-  {points < 5 && ` (เหลือ ${5 - points} ครั้ง)`}
-</p>
-{canRedeem && (
-  <div className="bg-green-100 text-green-700 p-2 rounded mt-2">
-    🎉 คุณมีสิทธิซักฟรีแล้ว!
+{/* 🔹 แสดงผลหลังเช็ค */}
+{displayPhone && (
+  <div className="mt-3 text-center">
+    <p className="font-semibold">
+      เบอร์: {displayPhone}
+    </p>
+
+    <p>
+      แต้ม: {points} / 5
+      {points < 5 && ` (เหลือ ${5 - points} ครั้ง)`}
+    </p>
+
+    {canRedeem && (
+      <div className="bg-green-100 text-green-700 p-2 rounded mt-2">
+        🎉 คุณมีสิทธิซักฟรี!
+      </div>
+    )}
   </div>
 )}
+
         <button
           onClick={() => router.push("/")}
           className="mb-4 text-sm"
@@ -316,7 +334,7 @@ if (!machine) {
     <div className="bg-white p-5 rounded-xl w-80 text-center">
 
       <p className="mb-2 font-semibold">
-        🎉 รับแต้มสะสม
+        🎉 รับแต้มสะสม ซักครบ 5 ฟรี 1
       </p>
 
       <input
