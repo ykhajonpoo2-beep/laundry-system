@@ -1,136 +1,95 @@
-// /app/api/points/route.ts
-
 import { NextResponse } from "next/server";
+import clientPromise from "@/lib/mongodb";
 
-type Customer = {
-  phone: string;
-  points: number;
-  updatedAt: number;
-};
+const MAX_POINTS = 5;
 
-// 🔥 mock database (เปลี่ยนเป็น DB จริงทีหลัง)
-const db: Record<string, Customer> = {};
-
-const MAX_POINTS = 1;
-const claimed: Record<string, boolean> = {};
-// ----------------------
-// GET → เช็คแต้ม
-// ----------------------
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const phone = searchParams.get("phone");
 
   if (!phone) {
-    return NextResponse.json(
-      { error: "phone required" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "phone required" }, { status: 400 });
   }
 
-  const user = db[phone] || {
-    phone,
-    points: 0,
-    updatedAt: Date.now(),
-  };
+  const client = await clientPromise;
+  const db = client.db("laundry");
+
+  const user = await db.collection("customers").findOne({ phone });
 
   return NextResponse.json({
     phone,
-    points: user.points,
-    remain: Math.max(0, MAX_POINTS - user.points),
-   
-    canRedeem: user.points >= MAX_POINTS
+    points: user?.points || 0,
+    canRedeem: (user?.points || 0) >= MAX_POINTS,
   });
+  return NextResponse.json({
+  version: "MONGODB OK",
+});
 }
 
 // ----------------------
 // POST → เพิ่มแต้ม
 // ----------------------
 export async function POST(req: Request) {
-  const body = await req.json();
-  const { phone, machineId, startTime } = body;
+  const { phone, machineId, startTime } = await req.json();
 
-  if (!phone || !machineId || !startTime) {
-    return NextResponse.json(
-      { error: "missing data" },
-      { status: 400 }
-    );
-  }
+  const client = await clientPromise;
+  const db = client.db("laundry");
 
-  // 🔥 unique key ต่อรอบการซัก
   const key = `${machineId}-${startTime}`;
 
-  // ❌ ถ้าเคยได้แต้มแล้ว
-  if (claimed[key]) {
-    return NextResponse.json(
-      { error: "already claimed" },
-      { status: 400 }
-    );
+  // 🔥 กันซ้ำ
+  const existing = await db.collection("claims").findOne({ key });
+
+  if (existing) {
+    return NextResponse.json({ error: "already claimed" }, { status: 400 });
   }
 
-  // ✅ mark ว่าใช้แล้ว
-  claimed[key] = true;
+  await db.collection("claims").insertOne({ key });
 
-  let user = db[phone];
+  await db.collection("customers").updateOne(
+    { phone },
+    {
+      $inc: { points: 1 },
+      $set: { updatedAt: new Date() },
+    },
+    { upsert: true }
+  );
 
-  if (!user) {
-    user = {
-      phone,
-      points: 0,
-      updatedAt: Date.now(),
-    };
-  }
-
-  user.points += 1;
-  user.updatedAt = Date.now();
-  db[phone] = user;
+  const user = await db.collection("customers").findOne({ phone });
 
   return NextResponse.json({
     message: "point added",
-    points: user.points,
-    remain: Math.max(0, MAX_POINTS - user.points),
+    points: user?.points || 0,
   });
 }
 
 // ----------------------
-// PUT → ใช้สิทธิ (redeem)
+// PUT → ใช้สิทธิ
 // ----------------------
 export async function PUT(req: Request) {
-  const body = await req.json();
-  const { phone, program } = body;
+  const { phone, program } = await req.json();
 
-  if (!phone) {
-    return NextResponse.json(
-      { error: "phone required" },
-      { status: 400 }
-    );
+  if (program !== 1) {
+    return NextResponse.json({ error: "only program 1" }, { status: 400 });
   }
 
-  const user = db[phone];
+  const client = await clientPromise;
+  const db = client.db("laundry");
+
+  const user = await db.collection("customers").findOne({ phone });
 
   if (!user || user.points < MAX_POINTS) {
-    return NextResponse.json(
-      { error: "not enough points" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "not enough points" }, { status: 400 });
   }
 
-  // 🔥 จำกัดเฉพาะโปรแกรม 1
-  if (program !== 1) {
-    return NextResponse.json(
-      { error: "redeem allowed only for program 1" },
-      { status: 400 }
-    );
-  }
-
-  // ✅ หักแต้มตามสิทธิ (ไม่ reset)
-  user.points -= MAX_POINTS;
-
-  user.updatedAt = Date.now();
-  db[phone] = user;
+  await db.collection("customers").updateOne(
+    { phone },
+    {
+      $inc: { points: -MAX_POINTS }, // 🔥 หักแต้ม
+    }
+  );
 
   return NextResponse.json({
     message: "redeemed",
-    points: user.points,
-    remain: Math.max(0, MAX_POINTS - user.points),
   });
 }
