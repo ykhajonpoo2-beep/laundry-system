@@ -156,6 +156,12 @@ useEffect(() => {
   if (!machine) return;
 
   const checkPopup = async () => {
+    const key = `popup-${machine.id}-${machine.endTime}`;
+
+    // 🔥 เช็คว่าขึ้นไปแล้วหรือยัง
+    const shown = localStorage.getItem(key);
+    if (shown) return;
+
     const res = await fetch("/api/points/check-claim", {
       method: "POST",
       headers: {
@@ -174,9 +180,12 @@ useEffect(() => {
       !machine.isFree &&
       machine.program > 0 &&
       machine.endTime &&
-      !data.alreadyClaimed // 🔥 สำคัญ
+      !data.alreadyClaimed
     ) {
       setShowPhonePopup(true);
+
+      // ✅ จำว่าเคยแสดงแล้ว
+      localStorage.setItem(key, "true");
     }
   };
 
@@ -184,7 +193,14 @@ useEffect(() => {
 }, [machine]);
 useEffect(() => {
   if (machine?.status === "available") {
-    localStorage.removeItem(`popup-${machine.id}`);
+    const keyPrefix = `popup-${machine.id}`;
+    
+    // 🔥 ลบทุก key ของเครื่องนี้
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith(keyPrefix)) {
+        localStorage.removeItem(k);
+      }
+    });
   }
 }, [machine]);
 
