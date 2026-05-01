@@ -81,19 +81,35 @@ const fetchData = async () => {
     return 0;
   };
 const claimPoint = async () => {
-  if (!phone || !machine) return;
+  // 🔥 ตรวจสอบเบอร์
+  const cleanPhone = phone.replace(/\D/g, ""); // เอาเฉพาะตัวเลข
 
-  await fetch("/api/points", {
+  if (cleanPhone.length !== 10) {
+    alert("กรุณากรอกเบอร์ให้ถูกต้อง (10 หลัก)");
+    return; // ❗ สำคัญ: หยุดตรงนี้ popup จะไม่ปิด
+  }
+
+  if (!machine) return;
+
+  const res = await fetch("/api/points", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      phone,
+      phone: cleanPhone,
       machineId: machine.id,
       startTime: machine.endTime,
     }),
   });
 
-  await checkPoints(); // ✅ สำคัญมาก
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.error || "เกิดข้อผิดพลาด");
+    return; // ❗ ยังไม่ปิด popup
+  }
+
+  // ✅ สำเร็จจริงค่อยปิด
+  await checkPoints();
   setShowPhonePopup(false);
 };
   // ✅ useEffect ทั้งหมดต้องอยู่ตรงนี้ (ก่อน return)
