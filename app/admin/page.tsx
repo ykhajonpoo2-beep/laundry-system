@@ -62,7 +62,17 @@ export default function AdminPage() {
       console.error(err);
     }
   };
+useEffect(() => {
+  const checkAuth = async () => {
+    const res = await fetch("/api/admin/check");
 
+    if (!res.ok) {
+      router.push("/admin/login");
+    }
+  };
+
+  checkAuth();
+}, []);
   useEffect(() => {
     fetchMachines();
     fetchRevenue();

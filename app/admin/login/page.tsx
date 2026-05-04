@@ -3,49 +3,52 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export default function Login() {
-  const [user, setUser] = useState("");
-  const [pass, setPass] = useState("");
+export default function LoginPage() {
   const router = useRouter();
 
-  const login = async () => {
+  const [password, setPassword] = useState("");
+
+  const handleLogin = async () => {
     const res = await fetch("/api/admin/login", {
       method: "POST",
       headers: {
-        "Content-Type": "application/json", // ✅ สำคัญ
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        username: user,
-        password: pass,
-      }),
+  username: "admin",
+  password,
+}),
     });
 
     if (res.ok) {
       router.push("/admin");
     } else {
-      alert("login failed");
+      alert("รหัสผิด");
     }
   };
 
   return (
-    <div className="p-10 space-y-2">
-      <input
-        onChange={(e) => setUser(e.target.value)}
-        placeholder="user"
-        className="border p-2 w-full"
-      />
-      <input
-        type="password"
-        onChange={(e) => setPass(e.target.value)}
-        placeholder="pass"
-        className="border p-2 w-full"
-      />
-      <button
-        onClick={login}
-        className="bg-black text-white px-4 py-2"
-      >
-        Login
-      </button>
+    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+      <div className="bg-white p-6 rounded-xl shadow w-80">
+        <h1 className="text-xl font-bold mb-4">
+          🔐 Admin Login
+        </h1>
+
+        <input
+          type="password"
+          placeholder="รหัสผ่าน"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="w-full border p-2 rounded mb-3"
+        />
+
+        <button
+          onClick={handleLogin}
+          className="w-full bg-blue-600 text-white p-2 rounded"
+        >
+          เข้าสู่ระบบ
+        </button>
+      </div>
     </div>
   );
 }
