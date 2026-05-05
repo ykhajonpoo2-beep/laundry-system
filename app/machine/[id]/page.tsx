@@ -7,6 +7,10 @@ const programs = [
   { id: 1, name: "ซักด่วน", duration: "30 นาที", price: 20 },
   { id: 2, name: "ซักด่วน น้ำอุ่น", duration: "37 นาที", price: 30 },
   { id: 3, name: "ซักหนัก น้ำร้อน", duration: "90 นาที", price: 40 },
+
+  // 🔥 เพิ่ม 2 โปรแกรมใหม่
+  { id: 4, name: "ซักประหยัด", duration: "45 นาที", price: 25 },
+  { id: 5, name: "ซักพิเศษ", duration: "60 นาที", price: 35 },
 ];
 
 export default function MachinePage() {

@@ -128,60 +128,65 @@ export default function HomePage() {
               </div>
 
               {/* 🔥 ข้อมูล */}
-              <div className="flex-1">
-                <div className="flex justify-between items-center mb-1">
-                  <span
-                    className={`
-                      text-xs px-2 py-0.5 rounded-full
-                      ${
-                        washer
-                          ? "bg-blue-500 text-white"
-                          : "bg-orange-500 text-white"
-                      }
-                    `}
-                  >
-                    {washer ? "ซักผ้า" : "อบผ้า"}
-                  </span>
-                </div>
+              <div className="flex-1 flex flex-col justify-between">
 
-                <div className="font-semibold">
-                  เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.
-                  {String(m.id).padStart(2, "0")}
-                </div>
+  {/* 🔷 TOP */}
+  <div>
 
-                {(running || paused) ? (
-                  <div className="text-sm mt-1 flex items-center gap-1 text-black">
-                    🕒 {Math.floor(getTime(m) / 60)
-                      .toString()
-                      .padStart(2, "0")}
-                    :
-                    {(getTime(m) % 60)
-                      .toString()
-                      .padStart(2, "0")}{" "}
-                    เหลือ
-                  </div>
-                ) : (
-                  <div className="text-sm mt-1 opacity-80">
-                    สแตนด์บาย
-                  </div>
-                )}
+    {/* badge */}
+    <span
+      className={`
+        text-xs px-3 py-1 rounded-full inline-block mb-2
+        ${washer ? "bg-blue-500 text-white" : "bg-orange-500 text-white"}
+      `}
+    >
+      {washer ? "ซักผ้า" : "อบผ้า"}
+    </span>
 
-                <div className="mt-2">
-                  {running ? (
-                    <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-600">
-                      กำลังทำงาน
-                    </span>
-                  ) : paused ? (
-                    <span className="text-xs px-3 py-1 rounded-full bg-yellow-400 text-black">
-                      หยุดชั่วคราว
-                    </span>
-                  ) : (
-                    <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
-                      พร้อมใช้งาน
-                    </span>
-                  )}
-                </div>
-              </div>
+    {/* ชื่อเครื่อง */}
+    <div className="text-sm font-semibold leading-tight">
+      เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.{String(m.id).padStart(2, "0")}
+    </div>
+
+    {/* สถานะรอง */}
+    <div className="text-sm mt-1 text-gray-600">
+      {(running || paused)
+        ? "กำลังทำงาน"
+        : "สแตนด์บาย"}
+    </div>
+
+  </div>
+
+              {(running || paused) && (
+  <div className="text-sm mt-2 text-black">
+    🕒 {Math.floor(getTime(m) / 60)
+      .toString()
+      .padStart(2, "0")}
+    :
+    {(getTime(m) % 60)
+      .toString()
+      .padStart(2, "0")}{" "}
+    เหลือ
+  </div>
+)}
+
+                <div className="mt-3">
+  {running ? (
+    <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-600">
+      กำลังทำงาน
+    </span>
+  ) : paused ? (
+    <span className="text-xs px-3 py-1 rounded-full bg-yellow-400 text-black">
+      หยุดชั่วคราว
+    </span>
+  ) : (
+    <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
+      พร้อมใช้งาน
+    </span>
+  )}
+</div>
+
+</div>
             </div>
           );
         })}
