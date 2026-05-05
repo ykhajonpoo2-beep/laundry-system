@@ -58,20 +58,34 @@ export default function HomePage() {
             <div
               key={m.id}
               onClick={() => router.push(`/machine/${m.id}`)}
-              className={`
-                rounded-2xl p-4 flex gap-3 items-center cursor-pointer
-                transition-all
-                ${
-                  running
-                    ? "bg-white"
-                    : paused
-                    ? "bg-yellow-200"
-                    : "bg-gray-400 text-white"
-                }
-              `}
-            >
+             className={`
+  rounded-2xl p-4 cursor-pointer transition-all
+  flex flex-col items-center text-center
+  ${
+    running
+      ? "bg-white"
+      : paused
+      ? "bg-yellow-200"
+      : "bg-gray-400 text-white"
+  }
+`}
+            >  {/* 🔷 TOP */}
+  <div className="mb-2">
+  <span
+    className={`
+      text-xs px-3 py-1 rounded-full inline-block mb-1
+      ${washer ? "bg-blue-500 text-white" : "bg-orange-500 text-white"}
+    `}
+  >
+    {washer ? "ซักผ้า" : "อบผ้า"}
+  </span>
+
+  <div className="text-sm font-semibold">
+    เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.{String(m.id).padStart(2, "0")}
+  </div>
+</div>
               {/* 🔥 รูปเครื่อง */}
-              <div className="w-20 h-20 relative flex items-center justify-center">
+              <div className="w-20 h-20 relative flex items-center justify-center my-2">
 
                 {/* เครื่องเต็ม */}
                 <img
@@ -130,32 +144,7 @@ export default function HomePage() {
               {/* 🔥 ข้อมูล */}
               <div className="flex-1 flex flex-col justify-between">
 
-  {/* 🔷 TOP */}
-  <div>
-
-    {/* badge */}
-    <span
-      className={`
-        text-xs px-3 py-1 rounded-full inline-block mb-2
-        ${washer ? "bg-blue-500 text-white" : "bg-orange-500 text-white"}
-      `}
-    >
-      {washer ? "ซักผ้า" : "อบผ้า"}
-    </span>
-
-    {/* ชื่อเครื่อง */}
-    <div className="text-sm font-semibold leading-tight">
-      เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.{String(m.id).padStart(2, "0")}
-    </div>
-
-    {/* สถานะรอง */}
-    <div className="text-sm mt-1 text-gray-600">
-      {(running || paused)
-        ? "กำลังทำงาน"
-        : "สแตนด์บาย"}
-    </div>
-
-  </div>
+ 
 
               {(running || paused) && (
   <div className="text-sm mt-2 text-black">
