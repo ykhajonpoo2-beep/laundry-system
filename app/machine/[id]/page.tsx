@@ -29,7 +29,9 @@ export default function MachinePage() {
   const [showPhonePopup, setShowPhonePopup] = useState(false);
  const searchParams = useSearchParams();
 const fromPayment = searchParams.get("from") === "payment";
-
+const [loadingProgram, setLoadingProgram] = useState<number | null>(null);
+const [loadingCheck, setLoadingCheck] = useState(false);
+const [loadingBack, setLoadingBack] = useState(false);
 const [displayPhone, setDisplayPhone] = useState("");
   // ✅ function
 const checkPoints = async () => {
@@ -38,14 +40,22 @@ const checkPoints = async () => {
     return;
   }
 
-  const res = await fetch(`/api/points?phone=${phone}`);
-  const data = await res.json();
+  setLoadingCheck(true);
 
-  setPoints(data.points);
-  setCanRedeem(data.canRedeem);
+  try {
+    const res = await fetch(`/api/points?phone=${phone}`);
+    const data = await res.json();
 
-  setDisplayPhone(phone); // แสดงผล
-  setPhone("");           // 🔥 ล้างช่องทันที
+    setPoints(data.points);
+    setCanRedeem(data.canRedeem);
+
+    setDisplayPhone(phone);
+    setPhone("");
+  } catch (err) {
+    console.error(err);
+  } finally {
+    setLoadingCheck(false);
+  }
 };
 
 const fetchData = async () => {
@@ -229,9 +239,13 @@ if (!machine) {
 
 <button
   onClick={checkPoints}
-  className="w-full bg-blue-600 text-white py-2 rounded"
+  disabled={loadingCheck}
+  className="w-full bg-blue-600 text-white py-2 rounded flex justify-center items-center gap-2"
 >
-  เช็คแต้ม
+  {loadingCheck && (
+    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+  )}
+  {loadingCheck ? "กำลังตรวจสอบ..." : "เช็คแต้ม"}
 </button>
 
 {/* 🔹 แสดงผลหลังเช็ค */}
@@ -254,12 +268,18 @@ if (!machine) {
   </div>
 )}
 
-        <button
-          onClick={() => router.push("/")}
-          className="mb-4 text-sm"
-        >
-          ← กลับหน้าแรก
-        </button>
+       <button
+  onClick={() => {
+    setLoadingBack(true);
+    router.push("/");
+  }}
+  className="mb-4 text-sm flex items-center gap-2"
+>
+  {loadingBack && (
+    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+  )}
+  ← กลับหน้าแรก
+</button>
 
         <h1 className="text-2xl font-bold mb-3">
           เครื่อง #{id}
@@ -287,29 +307,42 @@ if (!machine) {
         {status === "available" && machine.lidClosed && (
           <div className="space-y-3">
             {programs.map((program) => (
-              <button
-                key={program.id}
-                onClick={() =>
-                  router.push(
-                    `/machine/${id}/payment?program=${program.id}`
-                  )
-                }
-                className="w-full border rounded-xl p-4 text-left hover:bg-gray-50"
-              >
-                <div className="font-semibold">
-                  {program.name}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {program.duration} • {program.price} บาท
-                  {program.id === 1 && canRedeem ? (
-  <span className="text-green-600 font-bold">
-    ฟรี 🎉
-  </span>
-) : (
-  <span>{program.price} บาท</span>
-)}
-                </div>
-              </button>
+       <button
+  key={program.id}
+  onClick={() => {
+    if (loadingProgram !== null) return;
+
+    setLoadingProgram(program.id);
+
+    setTimeout(() => {
+      router.push(`/machine/${id}/payment?program=${program.id}`);
+    }, 300);
+  }}
+  className={`
+    w-full border rounded-xl p-4 text-left transition-all
+    ${loadingProgram === program.id ? "bg-gray-100" : "hover:bg-gray-50"}
+  `}
+>
+  <div className="font-semibold flex justify-between items-center">
+
+    {program.name}
+
+    {/* 🔥 spinner */}
+    {loadingProgram === program.id && (
+      <div className="w-5 h-5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+    )}
+
+  </div>
+
+  <div className="text-sm text-gray-500 mt-1">
+    {program.duration} •{" "}
+    {program.id === 1 && canRedeem ? (
+      <span className="text-green-600 font-bold">ฟรี 🎉</span>
+    ) : (
+      <span>{program.price} บาท</span>
+    )}
+  </div>
+</button>
             ))}
           </div>
         )}

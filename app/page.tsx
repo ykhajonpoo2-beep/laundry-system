@@ -43,7 +43,7 @@ export default function HomePage() {
   };
 
   const isWasher = (id: number) => id <= 2;
-
+  const [loadingId, setLoadingId] = useState<number | null>(null);
   return (
     <main className="min-h-screen bg-gray-200 p-4">
       <h1 className="text-xl font-bold mb-4">ร้านซัก</h1>
@@ -57,8 +57,14 @@ export default function HomePage() {
           return (
             <div
               key={m.id}
-              onClick={() => router.push(`/machine/${m.id}`)}
-             className={`
+              onClick={() => {
+  setLoadingId(m.id);
+
+  setTimeout(() => {
+    router.push(`/machine/${m.id}`);
+  }, 300); // delay นิดนึงให้เห็น animation
+}}
+             className={`  relative   // 👈 เพิ่มตรงนี้
   rounded-2xl p-4 cursor-pointer transition-all
   flex flex-col items-center text-center
   ${
@@ -174,7 +180,14 @@ export default function HomePage() {
     </span>
   )}
 </div>
+{loadingId === m.id && (
+  <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">
+    
+    {/* spinner */}
+    <div className="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin" />
 
+  </div>
+)}
 </div>
             </div>
           );
