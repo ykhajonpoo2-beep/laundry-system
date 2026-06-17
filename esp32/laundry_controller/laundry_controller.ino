@@ -202,26 +202,36 @@ notifyPower();   // 🔥 ตัวนี้แหละที่ขาด
 clearCommand();
 }
 
-else if (payload.indexOf("\"command\":\"start\"") >= 0) {
-  Serial.println("START");
+else if (payload.indexOf("\"command\":\"start\"") >= 0)
+{
+    Serial.println("START");
 
-  int price = 20;
+    int duration = 1800;
 
-  if (payload.indexOf("\"program\":30") >= 0) price = 30;
-  if (payload.indexOf("\"program\":40") >= 0) price = 40;
+    if (payload.indexOf("\"program\":1") >= 0)
+    {
+        runProgramByPrice(20);
+        duration = 1800;
+    }
 
-  runProgramByPrice(price);
+    else if (payload.indexOf("\"program\":2") >= 0)
+    {
+        runProgramByPrice(30);
+        duration = 2220;
+    }
 
-  int duration = 1800;
-  if (price == 30) duration = 2220;
-  if (price == 40) duration = 5400;
+    else if (payload.indexOf("\"program\":3") >= 0)
+    {
+        runProgramByPrice(40);
+        duration = 5400;
+    }
 
-  notifyStarted(duration);  // 🔥 ต้องมี
+    notifyStarted(duration);
 
-  machineRunning = true;
-  machinePaused = false;
+    machineRunning = true;
+    machinePaused = false;
 
-  clearCommand();
+    clearCommand();
 }
 
 else if (payload.indexOf("\"command\":\"pause\"") >= 0) {
@@ -250,14 +260,7 @@ else if (payload.indexOf("\"command\":\"resume\"") >= 0) {
   clearCommand();
 }
 
-else if (payload.indexOf("\"command\":\"resume\"") >= 0) {
-  pulsePin(startPin, 800);
 
-  machineRunning = true;
-  machinePaused = false;
-
-  clearCommand();
-}
   }
 
   http.end(); // ✅ ปิดตรงนี้ (นอก if)

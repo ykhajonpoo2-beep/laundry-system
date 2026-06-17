@@ -24,7 +24,11 @@ export default function PaymentPage() {
   const [timeLeft, setTimeLeft] = useState(60);
 const [paid, setPaid] = useState(false);
 const [lidClosed, setLidClosed] = useState(false);
+const [qrCodeUrl, setQrCodeUrl] =
+  useState<string | null>(null);
 
+const [chargeId, setChargeId] =
+  useState<string | null>(null);
 const [phone, setPhone] = useState("");
 const [canRedeem, setCanRedeem] = useState(false);
 const [waitingPayment, setWaitingPayment] = useState(true);
@@ -112,10 +116,11 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        machineId: Number(id),
-        price: program.price,
-        isFree: false,
-      }),
+  machineId: Number(id),
+  programId: Number(programId),
+  price: program.price,
+  isFree: false,
+}),
     });
 
     if (!res.ok) throw new Error();
@@ -223,6 +228,80 @@ useEffect(() => {
 
   return () => clearInterval(timer);
 }, []);
+useEffect(() => {
+  const createCharge = async () => {
+    try {
+      const res = await fetch(
+        "/api/omise/create-charge",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            machineId: Number(id),
+
+            program: program.price,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (!data.success) {
+        throw new Error(
+          data.error
+        );
+      }
+
+      setQrCodeUrl(data.qrCodeUrl);
+
+      setChargeId(data.chargeId);
+
+    } catch (err) {
+      console.error(err);
+
+      alert("สร้าง QR ไม่สำเร็จ");
+    }
+  };
+
+  createCharge();
+
+}, []);
+useEffect(() => {
+  if (!chargeId || paid) return;
+
+  const interval = setInterval(async () => {
+    try {
+      const res = await fetch(
+        "/api/omise/check-charge",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            chargeId,
+          }),
+        }
+      );
+
+      const data = await res.json();
+
+      if (data.paid) {
+        clearInterval(interval);
+
+        await confirmPayment();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, 5000);
+
+  return () => clearInterval(interval);
+}, [chargeId, paid]);
   return (
     <main className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow">
@@ -248,11 +327,19 @@ useEffect(() => {
 
         {/* QR */}
         {lidClosed ? (
-        <div
+ <div
   id="qr-area"
   className="border-2 border-dashed h-60 flex items-center justify-center mb-4"
 >
-  QR CODE
+  {qrCodeUrl ? (
+    <img
+      src={qrCodeUrl}
+      alt="PromptPay QR"
+      className="w-full max-w-xs"
+    />
+  ) : (
+    <p>กำลังสร้าง QR...</p>
+  )}
 </div>
         ) : (
           <div className="border-2 h-60 flex items-center justify-center mb-4 bg-gray-100">
@@ -287,7 +374,7 @@ useEffect(() => {
           disabled={!lidClosed || paid}
           className="w-full bg-black text-white py-3 rounded-xl disabled:opacity-50"
         >
-          {paid ? "กำลังดำเนินการ..." : "ฉันชำระแล้ว"}
+          {paid ? "กำลังดำเนินการ..." : "ทดสอบชำระเงิน"}
         </button>
 {waitingPayment && !paid && (
   <p className="text-yellow-500 text-center">
