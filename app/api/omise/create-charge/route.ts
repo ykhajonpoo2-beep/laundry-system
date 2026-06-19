@@ -57,7 +57,19 @@ await db.collection("paymentSessions").insertOne({
   uiExpireAt,
   paidAt: null,
 });
+const machines =
+  await db.collection("machines").find().toArray();
 
+await db.collection("machines").updateOne(
+  {
+    id: machineId,
+  },
+  {
+    $set: {
+      status: "waiting_payment",
+    },
+  }
+);
 return NextResponse.json({
   success: true,
 
