@@ -18,49 +18,43 @@ export async function POST(req: Request) {
 
     const amount = amountMap[program];
 
-    const charge = await omise.charges.create({
-      amount: amount * 100,
-      currency: "thb",
-      source: {
-        type: "promptpay",
-      },
-      metadata: {
-        machineId,
-        program,
-      },
-    });
+// สร้าง Charge จาก Omise
+const charge = await omise.charges.create({
+  amount: amount * 100,
+  currency: "thb",
+  source: {
+    type: "promptpay",
+  },
+  metadata: {
+    machineId,
+    program,
+  },
+});
 
-    const qr =
-      charge.source?.scannable_code?.image?.download_uri;
+// ได้ QR
+const qr =
+  charge.source?.scannable_code?.image?.download_uri;
 
-    const client = await clientPromise;
+// เชื่อม MongoDB
+const client = await clientPromise;
+const db = client.db("laundry");
+
+// บันทึก Session
 const uiExpireAt = new Date(
   Date.now() + 5 * 60 * 1000
 );
 
 await db.collection("paymentSessions").insertOne({
   chargeId: charge.id,
-
   machineId,
-
   amount,
-
   program,
-
   qrCodeUrl: qr,
-
   status: "pending",
-
   cancelled: false,
-
   createdAt: new Date(),
-
-  expiresAt: new Date(
-    Date.now() + 30 * 1000
-  ),
-
+  expiresAt: new Date(Date.now() + 30000),
   uiExpireAt,
-
   paidAt: null,
 });
 
