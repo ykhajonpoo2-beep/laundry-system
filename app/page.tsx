@@ -8,6 +8,10 @@ type Machine = {
   status: "available" | "running" | "paused";
   endTime: number | null;
   remainingTime?: number;
+
+  waitingPayment?: boolean;
+  paymentRemain?: number;
+  paymentProgram?: number;
 };
 
 export default function HomePage() {
@@ -53,16 +57,28 @@ export default function HomePage() {
           const running = m.status === "running";
           const paused = m.status === "paused";
           const washer = isWasher(m.id);
-
+const waiting = m.waitingPayment;
           return (
             <div
               key={m.id}
-              onClick={() => {
+onClick={() => {
+
   setLoadingId(m.id);
 
   setTimeout(() => {
-    router.push(`/machine/${m.id}`);
-  }, 300); // delay นิดนึงให้เห็น animation
+
+    if (m.waitingPayment) {
+
+      router.push(`/machine/${m.id}/payment`);
+
+    } else {
+
+      router.push(`/machine/${m.id}`);
+
+    }
+
+  },300);
+
 }}
              className={`  relative   // 👈 เพิ่มตรงนี้
   rounded-2xl p-4 cursor-pointer transition-all
@@ -152,33 +168,52 @@ export default function HomePage() {
 
  
 
-              {(running || paused) && (
+              {(running || paused || waiting) && (
   <div className="text-sm mt-2 text-black">
-    🕒 {Math.floor(getTime(m) / 60)
-      .toString()
-      .padStart(2, "0")}
-    :
-    {(getTime(m) % 60)
-      .toString()
-      .padStart(2, "0")}{" "}
+    
+
+🕒
+{Math.floor(
+  (waiting
+    ? m.paymentRemain ?? 0
+    : getTime(m)
+  ) / 60
+)
+  .toString()
+  .padStart(2, "0")}
+:
+{(
+  (waiting
+    ? m.paymentRemain ?? 0
+    : getTime(m)
+  ) % 60
+)
+  .toString()
+  .padStart(2, "0")}{" "}
     เหลือ
   </div>
 )}
 
-                <div className="mt-3">
-  {running ? (
-    <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-600">
-      กำลังทำงาน
-    </span>
-  ) : paused ? (
-    <span className="text-xs px-3 py-1 rounded-full bg-yellow-400 text-black">
-      หยุดชั่วคราว
-    </span>
-  ) : (
-    <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
-      พร้อมใช้งาน
-    </span>
-  )}
+<div className="mt-3">
+
+{running ? (
+  <span className="text-xs px-3 py-1 rounded-full bg-blue-100 text-blue-600">
+    กำลังทำงาน
+  </span>
+) : waiting ? (
+  <span className="text-xs px-3 py-1 rounded-full bg-yellow-300 text-black">
+    ⏳ รอการชำระ
+  </span>
+) : paused ? (
+  <span className="text-xs px-3 py-1 rounded-full bg-yellow-400 text-black">
+    หยุดชั่วคราว
+  </span>
+) : (
+  <span className="bg-gray-500 text-white text-xs px-3 py-1 rounded-full">
+    พร้อมใช้งาน
+  </span>
+)}
+
 </div>
 {loadingId === m.id && (
   <div className="absolute inset-0 bg-black/40 flex items-center justify-center rounded-2xl">

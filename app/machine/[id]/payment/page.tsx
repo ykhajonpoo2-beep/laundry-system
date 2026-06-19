@@ -29,6 +29,8 @@ const [qrCodeUrl, setQrCodeUrl] =
 
 const [chargeId, setChargeId] =
   useState<string | null>(null);
+  const [uiExpireAt, setUiExpireAt] =
+  useState<number>(0);
 const [phone, setPhone] = useState("");
 const [canRedeem, setCanRedeem] = useState(false);
 const [waitingPayment, setWaitingPayment] = useState(true);
@@ -202,32 +204,10 @@ useEffect(() => {
       .then(data => setCanRedeem(data.canRedeem));
   }
 }, []);
-const startTimeRef = useRef<number>(
-  Number(searchParams.get("t")) || Date.now()
-);
-const startTime = Number(searchParams.get("t")) || Date.now();
-const duration = 300000; // 5 นาที
 
-useEffect(() => {
-  if (!searchParams.get("t")) {
-    router.replace(
-      `/machine/${id}/payment?program=${programId}&t=${Date.now()}`
-    );
-  }
-}, []);
-useEffect(() => {
-  const timer = setInterval(() => {
-    const diff = Math.floor((startTime + duration - Date.now()) / 1000);
 
-    if (diff <= 0) {
-      router.push(`/machine/${id}`);
-    } else {
-      setTimeLeft(diff);
-    }
-  }, 1000);
 
-  return () => clearInterval(timer);
-}, []);
+
 useEffect(() => {
 
   const loadSession = async () => {
@@ -242,17 +222,21 @@ useEffect(() => {
 
       const data = await res.json();
 
-      if (data.found) {
+    if (data.found) {
 
-        setQrCodeUrl(data.qrCodeUrl);
+  setQrCodeUrl(data.qrCodeUrl);
 
-        setChargeId(data.chargeId);
+  setChargeId(data.chargeId);
 
-        setTimeLeft(data.remain);
+  setTimeLeft(data.remain);
 
-        return;
+  setUiExpireAt(
+    new Date(data.uiExpireAt).getTime()
+  );
 
-      }
+  return;
+
+}
 
       const createRes = await fetch(
 
@@ -290,19 +274,13 @@ useEffect(() => {
 
         throw new Error();
 
-      setQrCodeUrl(
+   setQrCodeUrl(charge.qrCodeUrl);
 
-        charge.qrCodeUrl
+setChargeId(charge.chargeId);
 
-      );
+setUiExpireAt(charge.uiExpireAt);
 
-      setChargeId(
-
-        charge.chargeId
-
-      );
-
-      setTimeLeft(300);
+setTimeLeft(300);
 
     }
 
@@ -315,8 +293,37 @@ useEffect(() => {
   };
 
   loadSession();
+useEffect(() => {
 
+  if (!uiExpireAt) return;
+
+  const timer = setInterval(() => {
+
+    const remain = Math.floor(
+
+      (uiExpireAt - Date.now()) / 1000
+
+    );
+
+    if (remain <= 0) {
+
+      clearInterval(timer);
+
+      router.replace(`/machine/${id}`);
+
+      return;
+
+    }
+
+    setTimeLeft(remain);
+
+  }, 1000);
+
+  return () => clearInterval(timer);
+
+}, [uiExpireAt]);
 }, [id]);
+
 useEffect(() => {
   if (!chargeId || paid) return;
 

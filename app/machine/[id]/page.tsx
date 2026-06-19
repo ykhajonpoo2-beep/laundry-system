@@ -33,6 +33,7 @@ const [loadingProgram, setLoadingProgram] = useState<number | null>(null);
 const [loadingCheck, setLoadingCheck] = useState(false);
 const [loadingBack, setLoadingBack] = useState(false);
 const [displayPhone, setDisplayPhone] = useState("");
+const [waitingPayment, setWaitingPayment] = useState(false);
   // ✅ function
 const checkPoints = async () => {
   if (phone.length !== 10) {
@@ -155,7 +156,39 @@ const claimPoint = async () => {
     clearInterval(timer);
   };
 }, [id]);
+useEffect(() => {
 
+  const checkWaiting = async () => {
+
+    try {
+
+      const res = await fetch(
+        `/api/payment-session?machineId=${id}`
+      );
+
+      const data = await res.json();
+
+      if (data.found) {
+
+        router.replace(`/machine/${id}/payment`);
+
+        return;
+
+      }
+
+      setWaitingPayment(false);
+
+    } catch (err) {
+
+      console.error(err);
+
+    }
+
+  };
+
+  checkWaiting();
+
+}, [id, router]);
 
 useEffect(() => {
   if (phone.length === 10) {
@@ -304,7 +337,7 @@ if (!machine) {
         )}
 
         {/* ✅ เลือกโปรแกรม */}
-        {status === "available" && machine.lidClosed && (
+        {status === "available" && machine.lidClosed &&  !waitingPayment && (
           <div className="space-y-3">
             {programs.map((program) => (
        <button

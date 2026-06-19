@@ -1,3 +1,4 @@
+import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
 import { getMachines, saveMachines } from "@/lib/machineDB";
 
@@ -45,19 +46,51 @@ export async function GET() {
     };
   }
 
-  return {
-    ...m,
-    isFree: m.isFree ?? false,     // ✅
-    program: m.program ?? 0,       // ✅
-    timeLeft,
-      };
+ return {
+  ...m,
+  isFree: m.isFree ?? false,
+  program: m.program ?? 0,
+  waitingPayment: false,
+  paymentRemain: 0,
+  timeLeft,
+};
     }).filter(Boolean);
 
     if (updated) {
       await saveMachines(machines);
     }
+const client = await clientPromise;
+const db = client.db("laundry");
 
-    return NextResponse.json(machines);
+const sessions = await db
+  .collection("paymentSessions")
+  .find({
+    cancelled: false,
+    status: "pending",
+    uiExpireAt: {
+      $gt: new Date(),
+    },
+  })
+  .toArray();
+
+for (const s of sessions) {
+  const machine = machines.find(
+    (m: any) => m.id === s.machineId
+  );
+
+  if (!machine) continue;
+
+  if (machine.status === "available") {
+    machine.waitingPayment = true;
+
+    machine.paymentRemain = Math.floor(
+      (new Date(s.uiExpireAt).getTime() - Date.now()) /
+        1000
+    );
+  }
+}
+
+return NextResponse.json(machines);
 
   } catch (err) {
     console.error("machines API error", err);
