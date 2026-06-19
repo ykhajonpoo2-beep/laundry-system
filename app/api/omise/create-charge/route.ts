@@ -53,7 +53,7 @@ await db.collection("paymentSessions").insertOne({
   status: "pending",
   cancelled: false,
   createdAt: new Date(),
-  expiresAt: new Date(Date.now() + 30000),
+  expiresAt: uiExpireAt,
   uiExpireAt,
   paidAt: null,
 });
