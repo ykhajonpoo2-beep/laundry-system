@@ -206,7 +206,7 @@ const startTimeRef = useRef<number>(
   Number(searchParams.get("t")) || Date.now()
 );
 const startTime = Number(searchParams.get("t")) || Date.now();
-const duration = 60000; // 60 วิ
+const duration = 300000; // 5 นาที
 
 useEffect(() => {
   if (!searchParams.get("t")) {
@@ -229,46 +229,94 @@ useEffect(() => {
   return () => clearInterval(timer);
 }, []);
 useEffect(() => {
-  const createCharge = async () => {
-    try {
-      const res = await fetch(
-        "/api/omise/create-charge",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            machineId: Number(id),
 
-            program: program.price,
-          }),
-        }
+  const loadSession = async () => {
+
+    try {
+
+      const res = await fetch(
+
+        `/api/payment-session?machineId=${id}`
+
       );
 
       const data = await res.json();
 
-      if (!data.success) {
-        throw new Error(
-          data.error
-        );
+      if (data.found) {
+
+        setQrCodeUrl(data.qrCodeUrl);
+
+        setChargeId(data.chargeId);
+
+        setTimeLeft(data.remain);
+
+        return;
+
       }
 
-      setQrCodeUrl(data.qrCodeUrl);
+      const createRes = await fetch(
 
-      setChargeId(data.chargeId);
+        "/api/omise/create-charge",
 
-    } catch (err) {
+        {
+
+          method: "POST",
+
+          headers: {
+
+            "Content-Type":
+
+              "application/json"
+
+          },
+
+          body: JSON.stringify({
+
+            machineId: Number(id),
+
+            program: program.price
+
+          })
+
+        }
+
+      );
+
+      const charge =
+
+        await createRes.json();
+
+      if (!charge.success)
+
+        throw new Error();
+
+      setQrCodeUrl(
+
+        charge.qrCodeUrl
+
+      );
+
+      setChargeId(
+
+        charge.chargeId
+
+      );
+
+      setTimeLeft(300);
+
+    }
+
+    catch (err) {
+
       console.error(err);
 
-      alert("สร้าง QR ไม่สำเร็จ");
     }
+
   };
 
-  createCharge();
+  loadSession();
 
-}, []);
+}, [id]);
 useEffect(() => {
   if (!chargeId || paid) return;
 

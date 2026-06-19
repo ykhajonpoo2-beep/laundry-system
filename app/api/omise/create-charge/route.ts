@@ -34,24 +34,45 @@ export async function POST(req: Request) {
       charge.source?.scannable_code?.image?.download_uri;
 
     const client = await clientPromise;
+const uiExpireAt = new Date(
+  Date.now() + 5 * 60 * 1000
+);
 
-    await client
-      .db("laundry")
-      .collection("paymentSessions")
-      .insertOne({
-        chargeId: charge.id,
-        machineId,
-        amount,
-        program,
-        status: "pending",
-        createdAt: new Date(),
-      });
+await db.collection("paymentSessions").insertOne({
+  chargeId: charge.id,
 
-    return NextResponse.json({
-      success: true,
-      chargeId: charge.id,
-      qrCodeUrl: qr,
-    });
+  machineId,
+
+  amount,
+
+  program,
+
+  qrCodeUrl: qr,
+
+  status: "pending",
+
+  cancelled: false,
+
+  createdAt: new Date(),
+
+  expiresAt: new Date(
+    Date.now() + 30 * 1000
+  ),
+
+  uiExpireAt,
+
+  paidAt: null,
+});
+
+return NextResponse.json({
+  success: true,
+
+  chargeId: charge.id,
+
+  qrCodeUrl: qr,
+
+  uiExpireAt: uiExpireAt.getTime(),
+});
 
   } catch (err: any) {
     return NextResponse.json({
