@@ -240,11 +240,6 @@ useEffect(() => {
     });
   }
 }, [machine]);
-
-// ✅ ค่อย return ทีหลัง
-if (!machine) {
-  return <p className="p-4">⏳ กำลังโหลด...</p>;
-}
 useEffect(() => {
 
   const checkSession = async () => {
@@ -268,6 +263,11 @@ useEffect(() => {
   checkSession();
 
 }, []);
+// ✅ ค่อย return ทีหลัง
+if (!machine) {
+  return <p className="p-4">⏳ กำลังโหลด...</p>;
+}
+
 
   return (
     
