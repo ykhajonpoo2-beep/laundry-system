@@ -215,76 +215,47 @@ useEffect(() => {
     try {
 
       const res = await fetch(
-
         `/api/payment-session?machineId=${id}`
-
       );
 
       const data = await res.json();
 
-    if (data.found) {
+      if (data.found) {
 
-  setQrCodeUrl(data.qrCodeUrl);
+        setQrCodeUrl(data.qrCodeUrl);
+        setChargeId(data.chargeId);
+        setTimeLeft(data.remain);
+        setUiExpireAt(
+          new Date(data.uiExpireAt).getTime()
+        );
 
-  setChargeId(data.chargeId);
-
-  setTimeLeft(data.remain);
-
-  setUiExpireAt(
-    new Date(data.uiExpireAt).getTime()
-  );
-
-  return;
-
-}
+        return;
+      }
 
       const createRes = await fetch(
-
         "/api/omise/create-charge",
-
         {
-
           method: "POST",
-
           headers: {
-
-            "Content-Type":
-
-              "application/json"
-
+            "Content-Type": "application/json",
           },
-
           body: JSON.stringify({
-
             machineId: Number(id),
-
-            program: program.price
-
-          })
-
+            program: program.price,
+          }),
         }
-
       );
 
-      const charge =
+      const charge = await createRes.json();
 
-        await createRes.json();
+      if (!charge.success) throw new Error();
 
-      if (!charge.success)
+      setQrCodeUrl(charge.qrCodeUrl);
+      setChargeId(charge.chargeId);
+      setUiExpireAt(charge.uiExpireAt);
+      setTimeLeft(300);
 
-        throw new Error();
-
-   setQrCodeUrl(charge.qrCodeUrl);
-
-setChargeId(charge.chargeId);
-
-setUiExpireAt(charge.uiExpireAt);
-
-setTimeLeft(300);
-
-    }
-
-    catch (err) {
+    } catch (err) {
 
       console.error(err);
 
@@ -293,6 +264,8 @@ setTimeLeft(300);
   };
 
   loadSession();
+
+}, [id]);   // ✅ จบตรงนี้
 useEffect(() => {
 
   if (!uiExpireAt) return;
@@ -300,9 +273,7 @@ useEffect(() => {
   const timer = setInterval(() => {
 
     const remain = Math.floor(
-
       (uiExpireAt - Date.now()) / 1000
-
     );
 
     if (remain <= 0) {
@@ -312,7 +283,6 @@ useEffect(() => {
       router.replace(`/machine/${id}`);
 
       return;
-
     }
 
     setTimeLeft(remain);
@@ -321,9 +291,7 @@ useEffect(() => {
 
   return () => clearInterval(timer);
 
-}, [uiExpireAt]);
-}, [id]);
-
+}, [uiExpireAt, id, router]);
 useEffect(() => {
   if (!chargeId || paid) return;
 
@@ -362,7 +330,24 @@ useEffect(() => {
       <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow">
 <button
 
-  onClick={() => router.push(`/machine/${id}?from=payment`)}
+  onClick={async () => {
+
+  await fetch(
+    "/api/payment-session/cancel",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        machineId: Number(id),
+      }),
+    }
+  );
+
+  router.push(`/machine/${id}`);
+
+}}
   className="mb-4 text-sm"
 >
   ← ย้อนกลับ

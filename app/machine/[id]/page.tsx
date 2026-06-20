@@ -158,35 +158,25 @@ const claimPoint = async () => {
 }, [id]);
 useEffect(() => {
 
-  const checkWaiting = async () => {
+  const checkWaitingPayment = async () => {
 
-    try {
+    const res = await fetch(
+      `/api/payment-session?machineId=${id}`
+    );
 
-      const res = await fetch(
-        `/api/payment-session?machineId=${id}`
+    const data = await res.json();
+
+    if (data.found) {
+
+      router.replace(
+        `/machine/${id}/payment`
       );
-
-      const data = await res.json();
-
-      if (data.found) {
-
-        router.replace(`/machine/${id}/payment`);
-
-        return;
-
-      }
-
-      setWaitingPayment(false);
-
-    } catch (err) {
-
-      console.error(err);
 
     }
 
   };
 
-  checkWaiting();
+  checkWaitingPayment();
 
 }, [id, router]);
 
@@ -255,7 +245,29 @@ useEffect(() => {
 if (!machine) {
   return <p className="p-4">⏳ กำลังโหลด...</p>;
 }
+useEffect(() => {
 
+  const checkSession = async () => {
+
+    const res = await fetch(
+      `/api/payment-session?machineId=${id}`
+    );
+
+    const data = await res.json();
+
+    if (data.found) {
+
+      router.replace(
+        `/machine/${id}/payment`
+      );
+
+    }
+
+  };
+
+  checkSession();
+
+}, []);
 
   return (
     
