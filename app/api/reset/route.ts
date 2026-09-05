@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "redis";
 
 const redis = createClient({
-  url: process.env.REDIS_URL,
+  url: process.env.LAUNDRY_NEW_REDIS_URL,
 });
 
 export async function GET() {
