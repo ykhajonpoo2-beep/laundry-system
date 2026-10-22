@@ -52,3 +52,5 @@ build
 # Arduino
 .arduinoIDE
 *.log
+# Local ESP32 backup containing Wi-Fi credentials
+esp32/laundry_controller/laundry_controller_backup.ino
