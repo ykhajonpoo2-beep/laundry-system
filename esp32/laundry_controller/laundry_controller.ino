@@ -1,24 +1,28 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
 
-const char* ssid = "Maepha_2.4G";
-const char* password = "0933871156";
+const char* ssid = "NAVANARA_2.4G";
+const char* password = "yuthapong0856771876";
 
 const char* serverUrl =
   "https://laundry-system-one.vercel.app";
 
-const int powerPin = 5;
-const int jogA = 18;
-const int jogB = 19;
-const int tempPin = 21;
-const int revPin = 22;
-const int startPin = 23;
-const int machineDonePin = 4;
-const int lidPin = 15; // เซ็นเซอร์ฝา
+#define MACHINE_ID 1
+
+const int powerPin = 4;
+const int jogA = 5;
+const int jogB = 6;
+const int tempPin = 7;
+const int revPin = 15;
+const int startPin = 16;
+const int machineDonePin = 17;
+const int lidPin = 18; // เซ็นเซอร์ฝา
 bool machineRunning = false;
 bool machinePaused = false;
+bool lastDoneState = LOW;
 unsigned long washEndTime = 0;
-unsigned long lastPoll = 0;
+unsigned long lastPoll = 0; 
+unsigned long lastAlive = 0;
 unsigned long lastDoneTrigger = 0;
 unsigned long remainingTime = 0;
 void pulsePin(int pin, int ms = 300) {
@@ -26,20 +30,36 @@ void pulsePin(int pin, int ms = 300) {
   delay(ms);
   digitalWrite(pin, LOW);
 }void jogSequence(int count) {
-  for (int i = 0; i < count; i++) {
-    pulsePin(jogA, 150);
-    delay(120);
 
-    pulsePin(jogB, 150);
-    delay(180);
+  for (int i = 0; i < count; i++) {
+
+    // A จากก่อน
+    digitalWrite(jogB, HIGH);
+
+    delay(100);
+
+    // B จากตาม ขณะ A ยังจากอยู่
+    digitalWrite(jogA, HIGH);
+
+    delay(100);
+
+    // B กลับก่อน
+    digitalWrite(jogB, LOW);
+
+    delay(100);
+
+    // A กลับทีหลัง
+    digitalWrite(jogA, LOW);
+
+    delay(100);
   }
 }void pulseMultiple(
   int pin,
   int count
 ) {
   for (int i = 0; i < count; i++) {
-    pulsePin(pin, 200);
-    delay(250);
+    pulsePin(pin, 250);
+    delay(500);
   }
 }void runWashSequence(
   int jogCount,
@@ -47,41 +67,41 @@ void pulsePin(int pin, int ms = 300) {
   int revCount
 ) {
   Serial.println("POWER");
-  pulsePin(powerPin, 400);
+  pulsePin(powerPin, 250);
 
-  delay(500);
+  delay(2000);
 
   Serial.println("JOG");
   jogSequence(jogCount);
 
-  delay(300);
+  delay(1000);
 
   Serial.println("TEMP");
   pulseMultiple(tempPin, tempCount);
 
-  delay(300);
+  delay(1000);
 
   Serial.println("REV");
   pulseMultiple(revPin, revCount);
 
-  delay(300);
+  delay(1000);
 
   Serial.println("START");
-  pulsePin(startPin, 400);
+  pulsePin(startPin, 250);
 }void runProgramByPrice(int price) {
   switch (price) {
     case 20:
-      runWashSequence(1, 0, 0);
+      runWashSequence(4, 0, 0);
       startMachine(1800);
       break;
 
     case 30:
-      runWashSequence(2, 1, 0);
+      runWashSequence(12, 0, 0);
       startMachine(2220);
       break;
 
     case 40:
-      runWashSequence(3, 1, 1);
+      runWashSequence(7, 0, 0);
       startMachine(5400);
       break;
   }
@@ -101,7 +121,7 @@ void startMachine(int duration) {
 // ----------------------
 void clearCommand() {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url = String(serverUrl) + "/api/machine-command";
 
   http.begin(url);
@@ -116,15 +136,21 @@ void clearCommand() {
 // ----------------------
 void notifyMachineDone() {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url = String(serverUrl) + "/api/machine-done";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
-  String body = "{\"machineId\":1}";
+  String body =
+  "{\"machineId\":" +
+  String(MACHINE_ID) +
+  "}";
 
-  http.POST(body);
+  int code = http.POST(body);
+
+Serial.print("DONE HTTP=");
+Serial.println(code);
   http.end();
 }
 
@@ -132,14 +158,20 @@ void notifyMachineDone() {
 // 🔥 แจ้ง power
 void notifyPower() {
   HTTPClient http;
+  http.setTimeout(5000);
   http.begin(String(serverUrl) + "/api/machine-power");
   http.addHeader("Content-Type", "application/json");
-  http.POST("{\"machineId\":1}");
+  String body =
+  "{\"machineId\":" +
+  String(MACHINE_ID) +
+  "}";
+
+http.POST(body);
   http.end();
 }
 void notifyStarted(int duration) {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url = String(serverUrl) + "/api/machine-started";
 
   http.begin(url);
@@ -152,40 +184,57 @@ void notifyStarted(int duration) {
 }
 void notifyPaused() {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url = String(serverUrl) + "/api/machine-paused";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
-  http.POST("{\"machineId\":1}");
+  String body =
+  "{\"machineId\":" +
+  String(MACHINE_ID) +
+  "}";
+
+http.POST(body);
 
   http.end();
 }
 void notifyResume() {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url = String(serverUrl) + "/api/machine-resume";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
-  http.POST("{\"machineId\":1}");
+  String body =
+  "{\"machineId\":" +
+  String(MACHINE_ID) +
+  "}";
+
+http.POST(body);
 
   http.end();
 }
 // ----------------------
 void checkCommand() {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url =
     String(serverUrl) +
-    "/api/machine-command?id=1";
+    "/api/machine-command?id=" +
+String(MACHINE_ID);
 
   http.begin(url);
 
   int code = http.GET();
+Serial.print("POLL CODE = ");
+Serial.println(code);
 
+if (code >= 300 && code < 400) {
+  Serial.print("REDIRECT TO: ");
+  Serial.println(http.getLocation());
+}
   Serial.print("POLL CODE = ");
   Serial.println(code);
 
@@ -202,7 +251,10 @@ notifyPower();   // 🔥 ตัวนี้แหละที่ขาด
 clearCommand();
 }
 
-else if (payload.indexOf("\"command\":\"start\"") >= 0)
+else if (
+ payload.indexOf("\"command\":\"start\"") >= 0
+ && !machineRunning
+)
 {
     Serial.println("START");
 
@@ -281,7 +333,7 @@ bool lastLidState = true;
 
 void sendLidStatus(bool closed) {
   HTTPClient http;
-
+  http.setTimeout(5000);
   String url = String(serverUrl) + "/api/lid-status";
 
   http.begin(url);
@@ -289,11 +341,21 @@ void sendLidStatus(bool closed) {
 
   String body = String("{\"machineId\":1,\"closed\":") + (closed ? "true" : "false") + "}";
 
-  http.POST(body);
+  int code = http.POST(body);
+
+Serial.print("LID HTTP=");
+Serial.println(code);
   http.end();
 }
+
 // ----------------------
 void setup() {
+  static unsigned long lastDebug = 0;
+
+if (millis() - lastDebug > 5000) {
+  Serial.println("LOOP RUNNING");
+  lastDebug = millis();
+}
   Serial.begin(115200);
 
 pinMode(powerPin, OUTPUT);
@@ -310,28 +372,49 @@ digitalWrite(tempPin, LOW);
 digitalWrite(revPin, LOW);
 digitalWrite(startPin, LOW);
 
-  pinMode(machineDonePin, INPUT_PULLUP);
-   pinMode(lidPin, INPUT_PULLUP);
-  WiFi.begin(ssid, password);
+  pinMode(machineDonePin, INPUT_PULLDOWN);
+  pinMode(lidPin, INPUT_PULLUP);
+bool closed =
+  digitalRead(lidPin) == HIGH;
 
-  Serial.print("Connecting");
+lastLidState = closed;
 
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
+WiFi.begin(ssid,password);
 
+while (WiFi.status() != WL_CONNECTED) {
+  delay(500);
+}
+
+sendLidStatus(closed);
+Serial.println("SETUP DONE");
   Serial.println("\nWiFi connected");
   Serial.println(WiFi.localIP());
 }
 
 // ----------------------
 void loop() {
+  if (WiFi.status() != WL_CONNECTED) {
+
+  Serial.println("WiFi Lost");
+
+  WiFi.disconnect();
+
+  WiFi.begin(ssid, password);
+
+  delay(1000);
+
+  return;
+}
   if (millis() - lastPoll > 1000) {
     lastPoll = millis();
     checkCommand();
   }
+if (millis() - lastAlive > 60000) {
 
+  Serial.println("ALIVE");
+
+  lastAlive = millis();
+}
   checkFinish();
 int doneState = digitalRead(machineDonePin);
 int lidState = digitalRead(lidPin);
@@ -350,19 +433,33 @@ Serial.println(doneState);
 Serial.print("LID PIN = ");
 Serial.println(lidState);
 
-// ตรวจเครื่องซักเสร็จ
-if (
-    doneState == LOW &&
-    millis() - lastDoneTrigger > 3000
-) {
-  Serial.println("PIN DONE");
+// ตรวจเครื่องซักเสร็จ (LDR)
+static unsigned long doneHighStart = 0;
 
-  machineRunning = false;
+if (doneState == HIGH)
+{
+    if (doneHighStart == 0)
+        doneHighStart = millis();
 
-  notifyMachineDone();
+    if (
+        millis() - doneHighStart > 3000 &&
+        lastDoneState == LOW
+    )
+    {
+        Serial.println("PIN DONE");
 
-  lastDoneTrigger = millis();
+        machineRunning = false;
+        machinePaused = false;
+
+        notifyMachineDone();
+    }
 }
+else
+{
+    doneHighStart = 0;
+}
+
+lastDoneState = doneState;
 
   delay(200);
 }
