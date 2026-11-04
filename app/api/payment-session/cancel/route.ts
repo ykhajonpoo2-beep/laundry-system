@@ -1,41 +1,62 @@
+
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 
 export async function POST(req: Request) {
   try {
-    const { machineId } = await req.json();
+    const body = await req.json();
+    const machineId = Number(body.machineId);
+    const chargeId = String(body.chargeId || "").trim();
+
+    if (
+      !Number.isInteger(machineId) ||
+      machineId < 1 ||
+      !chargeId
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "ข้อมูลรายการชำระเงินไม่ถูกต้อง",
+        },
+        { status: 400 }
+      );
+    }
 
     const client = await clientPromise;
-    const db = client.db("laundry");
+    const sessions = client
+      .db("laundry")
+      .collection("paymentSessions");
 
-    await db.collection("paymentSessions").updateMany(
+    const result = await sessions.updateOne(
       {
         machineId,
+        chargeId,
         status: "pending",
-        cancelled: false,
+        cancelled: { $ne: true },
+        startedAt: null,
       },
       {
         $set: {
           cancelled: true,
+          status: "cancelled",
+          cancelledAt: new Date(),
         },
       }
     );
 
     return NextResponse.json({
       success: true,
+      cancelled: result.modifiedCount === 1,
     });
-
-  } catch (err: any) {
+  } catch (error) {
+    console.error("Cancel payment session error:", error);
 
     return NextResponse.json(
       {
         success: false,
-        error: err.message,
+        error: "ไม่สามารถยกเลิกรายการได้",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
-
   }
 }

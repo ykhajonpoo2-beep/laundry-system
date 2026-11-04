@@ -1,5 +1,7 @@
+
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
+import { getMachines, saveMachines } from "@/lib/machineDB";
 
 const omise = require("omise")({
   secretKey: process.env.OMISE_SECRET_KEY,
@@ -10,37 +12,317 @@ export async function POST(req: Request) {
   try {
     const { chargeId } = await req.json();
 
-    const charge = await omise.charges.retrieve(chargeId);
-
-    if (charge.status === "successful") {
-      const client = await clientPromise;
-      const db = client.db("laundry");
-
-      await db.collection("paymentSessions").updateOne(
-        {
-          chargeId,
-        },
-        {
-          $set: {
-            status: "paid",
-            paidAt: new Date(),
-          },
-        }
+    if (
+      typeof chargeId !== "string" ||
+      !chargeId.startsWith("chrg_")
+    ) {
+      return NextResponse.json(
+        { success: false, error: "chargeId ไม่ถูกต้อง" },
+        { status: 400 }
       );
     }
 
+    const client = await clientPromise;
+    const sessions = client.db("laundry").collection("paymentSessions");
+
+    const session = await sessions.findOne({ chargeId });
+
+    if (!session) {
+      return NextResponse.json(
+        { success: false, error: "ไม่พบรายการชำระเงิน" },
+        { status: 404 }
+      );
+    }
+
+    // หากรายการนี้เริ่มเครื่องแล้ว ไม่สั่งซ้ำ
+    if (session.status === "started" && session.startedAt) {
+      return NextResponse.json({
+        success: true,
+        paid: true,
+        started: true,
+        status: "successful",
+        machineId: session.machineId,
+      });
+    }
+
+
+    // ตรวจสอบกับ Omise โดยตรง
+const charge = await omise.charges.retrieve(chargeId);
+
+// ถ้ายังไม่ชำระเงิน ให้ตรวจว่ารายการถูกยกเลิกหรือหมดอายุหรือไม่
+if (charge.status !== "successful") {
+  if (
+    session.cancelled === true ||
+    session.status === "cancelled"
+  ) {
     return NextResponse.json({
       success: true,
-      paid: charge.status === "successful",
-      status: charge.status,
+      paid: false,
+      started: false,
+      status: "cancelled",
     });
+  }
 
-  } catch (err: any) {
+  return NextResponse.json({
+    success: true,
+    paid: false,
+    started: false,
+    status: charge.status,
+  });
+}
 
-    return NextResponse.json({
-      success: false,
-      error: err.message,
-    });
 
+    // ยอดเงินและสกุลเงินต้องตรงกับรายการในฐานข้อมูล
+    const expectedAmount = Number(session.amount) * 100;
+    const actualCurrency = String(charge.currency || "").toLowerCase();
+
+    if (
+      !Number.isFinite(expectedAmount) ||
+      Number(charge.amount) !== expectedAmount ||
+      actualCurrency !== "thb"
+    ) {
+      return NextResponse.json(
+        {
+          success: false,
+          paid: true,
+          started: false,
+          error: "ยอดเงินหรือสกุลเงินไม่ตรงกับรายการ กรุณาตรวจสอบด้วยตนเอง",
+        },
+        { status: 409 }
+      );
+    }
+
+    // หากหมดอายุแล้วแต่ Omise แจ้งว่าจ่ายสำเร็จ
+    // เก็บสถานะการจ่ายเงินไว้ แต่ไม่เริ่มเครื่องอัตโนมัติ
+   if (
+  session.cancelled === true ||
+  session.status === "cancelled" ||
+  (session.expiresAt &&
+    new Date(session.expiresAt).getTime() < Date.now())
+) {
+      await sessions.updateOne(
+        { _id: session._id },
+        {
+          $set: {
+            status: "paid",
+            paidAt: session.paidAt || new Date(),
+            manualReview: true,
+            manualReviewReason: session.cancelled === true ||
+            session.status === "cancelled"
+            ? "ชำระสำเร็จหลังยกเลิกรายการ"
+            : "ชำระสำเร็จหลังรายการหมดอายุ",
+          },
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        paid: true,
+        started: false,
+        manualReview: true,
+        status: "successful",
+        message: "ชำระเงินสำเร็จ แต่ต้องตรวจสอบรายการก่อนเริ่มเครื่อง",
+      });
+    }
+
+    // ล็อกการเริ่มเครื่อง ป้องกันการประมวลผลซ้ำจากการ polling
+    const now = new Date();
+    const lockUntil = new Date(Date.now() + 30_000);
+
+   const claim = await sessions.findOneAndUpdate(
+  {
+    _id: session._id,
+    startedAt: null,
+    cancelled: { $ne: true },
+    status: { $ne: "cancelled" },
+    $or: [
+      { startLockUntil: { $exists: false } },
+      { startLockUntil: { $lt: now } },
+    ],
+  },
+      {
+        $set: {
+          status: "paid",
+          paidAt: session.paidAt || now,
+          startLockUntil: lockUntil,
+        },
+      },
+      { returnDocument: "after" }
+    );
+
+    if (!claim) {
+      const latest = await sessions.findOne({ _id: session._id });
+
+      if (latest?.startedAt) {
+        return NextResponse.json({
+          success: true,
+          paid: true,
+          started: true,
+          status: "successful",
+          machineId: session.machineId,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        paid: true,
+        started: false,
+        processing: true,
+        status: "successful",
+        message: "กำลังประมวลผลรายการนี้",
+      });
+    }
+
+    const machineId = Number(session.machineId);
+    const programId = Number(session.programId);
+    const cycleId = `omise_${chargeId}`;
+
+    try {
+      const machines = await getMachines();
+      const machine = machines.find(
+        (item: any) => Number(item.id) === machineId
+      );
+
+      if (!machine) {
+        throw new Error("ไม่พบเครื่องที่ผูกกับรายการชำระเงิน");
+      }
+
+      // หาก Redis บันทึกรอบเดียวกันไปแล้ว ให้ถือว่าสั่งเริ่มแล้ว
+      if (machine.cycleId === cycleId) {
+        await sessions.updateOne(
+          { _id: session._id },
+          {
+            $set: {
+              status: "started",
+              startedAt: new Date(),
+            },
+            $unset: { startLockUntil: "" },
+          }
+        );
+
+        return NextResponse.json({
+          success: true,
+          paid: true,
+          started: true,
+          status: "successful",
+          machineId,
+        });
+      }
+
+      if (
+        machine.machineType !== "washer" ||
+        Number(machine.capacityKg) !== 9
+      ) {
+        throw new Error("รายการนี้ไม่ใช่เครื่องซักผ้า 9 กก. ที่รองรับ");
+      }
+
+      if (machine.status !== "available") {
+        throw new Error("เครื่องไม่พร้อมทำงานหลังชำระเงิน");
+      }
+
+      if (machine.lidClosed !== true) {
+        throw new Error("ฝาเครื่องยังไม่ปิด");
+      }
+
+      const durations: Record<number, number> = {
+        1: 17 * 60,
+        2: 19 * 60,
+        3: 60 * 60,
+        4: 70 * 60,
+        5: 90 * 60,
+      };
+
+      const duration = durations[programId];
+
+      if (!duration) {
+        throw new Error("ไม่พบโปรแกรมที่ผูกกับรายการชำระเงิน");
+      }
+
+      const updatedMachines = machines.map((item: any) => {
+        if (Number(item.id) !== machineId) return item;
+
+        return {
+          ...item,
+          status: "running",
+          command: "start",
+          program: programId,
+          price: Number(session.amount),
+          endTime: Date.now() + duration * 1000,
+          isFree: false,
+          cycleId,
+        };
+      });
+
+      await saveMachines(updatedMachines);
+
+      await sessions.updateOne(
+        { _id: session._id },
+        {
+          $set: {
+            status: "started",
+            startedAt: new Date(),
+            cycleId,
+            durationSeconds: duration,
+          },
+          $unset: {
+            startLockUntil: "",
+            manualReview: "",
+            manualReviewReason: "",
+          },
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        paid: true,
+        started: true,
+        status: "successful",
+        machineId,
+        programId,
+        duration,
+        cycleId,
+      });
+    } catch (machineError) {
+      // ไม่ลบข้อมูลการจ่ายเงิน หากเครื่องยังเริ่มไม่ได้
+      await sessions.updateOne(
+        { _id: session._id },
+        {
+          $set: {
+            status: "paid",
+            manualReview: true,
+            manualReviewReason:
+              machineError instanceof Error
+                ? machineError.message
+                : "ไม่สามารถเริ่มเครื่องได้",
+          },
+          $unset: { startLockUntil: "" },
+        }
+      );
+
+      return NextResponse.json(
+        {
+          success: false,
+          paid: true,
+          started: false,
+          manualReview: true,
+          error:
+            machineError instanceof Error
+              ? machineError.message
+              : "ชำระแล้ว แต่เริ่มเครื่องไม่ได้",
+        },
+        { status: 409 }
+      );
+    }
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "เกิดข้อผิดพลาดในการตรวจสอบการชำระเงิน",
+      },
+      { status: 500 }
+    );
   }
 }

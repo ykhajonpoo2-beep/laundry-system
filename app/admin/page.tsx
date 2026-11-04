@@ -24,7 +24,8 @@ export default function AdminPage() {
 
   const [machines, setMachines] = useState<Machine[]>([]);
   const [loading, setLoading] = useState(true);
-
+const [authorized, setAuthorized] = useState(false);
+const [authChecking, setAuthChecking] = useState(true);
   // ✅ NEW: revenue state
   const [revenueData, setRevenueData] = useState<any[]>([]);
 
@@ -63,23 +64,54 @@ export default function AdminPage() {
     }
   };
 useEffect(() => {
-  const checkAuth = async () => {
-    const res = await fetch("/api/admin/check");
+  let active = true;
 
-    if (!res.ok) {
-      router.push("/admin/login");
+  const checkAuth = async () => {
+    try {
+      const res = await fetch("/api/admin/check", {
+        method: "GET",
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+
+      if (!res.ok) {
+        router.replace("/admin/login");
+        return;
+      }
+
+      const data = await res.json();
+
+      if (data.ok && active) {
+        setAuthorized(true);
+      } else {
+        router.replace("/admin/login");
+      }
+    } catch (error) {
+      console.error("Admin auth error:", error);
+      router.replace("/admin/login");
+    } finally {
+      if (active) {
+        setAuthChecking(false);
+      }
     }
   };
 
   checkAuth();
-}, []);
-  useEffect(() => {
-    fetchMachines();
-    fetchRevenue();
 
-    const timer = setInterval(fetchMachines, 5000);
-    return () => clearInterval(timer);
-  }, []);
+  return () => {
+    active = false;
+  };
+}, [router]);
+  useEffect(() => {
+  if (!authorized) return;
+
+  fetchMachines();
+  fetchRevenue();
+
+  const timer = setInterval(fetchMachines, 5000);
+
+  return () => clearInterval(timer);
+}, [authorized]);
 
   // 📊 summary
   const total = machines.length;
@@ -103,7 +135,11 @@ useEffect(() => {
 
     fetchMachines();
   };
+if (authChecking) {
+  return <p className="p-4">🔐 กำลังตรวจสอบสิทธิ์...</p>;
+}
 
+if (!authorized) return null;
   if (loading) return <p className="p-4">⏳ Loading...</p>;
 
   return (
@@ -126,10 +162,18 @@ useEffect(() => {
 
         {/* 📊 SUMMARY */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-          <div className="bg-white p-4 rounded-xl shadow">
-            <p>ทั้งหมด</p>
-            <p className="text-xl md:text-2xl font-bold">{total}</p>
-          </div>
+          <button
+  type="button"
+  onClick={() => router.push("/")}
+  className="w-full bg-white p-4 rounded-xl shadow text-left hover:shadow-md transition cursor-pointer"
+  aria-label={`เข้าสู่โหมดทดสอบ เลือกเครื่องทั้งหมด ${total} เครื่อง`}
+>
+  <p>ทั้งหมด</p>
+  <p className="text-xl md:text-2xl font-bold">{total}</p>
+  <p className="text-xs text-blue-600 mt-1">
+    กดเพื่อเลือกเครื่องใน TEST MODE
+  </p>
+</button>
 
           <div className="bg-green-100 p-4 rounded-xl">
             <p>ว่าง</p>

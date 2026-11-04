@@ -1,25 +1,33 @@
+
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifyAdminSession, COOKIE_NAME } from "@/lib/adminAuth";
 
 export function proxy(req: NextRequest) {
-  const isLoggedIn = req.cookies.get("admin");
   const path = req.nextUrl.pathname;
 
-  // ✅ 1. ถ้า login แล้ว → ห้ามกลับหน้า login
+  // ตรวจสอบ Session จริง
+  const token = req.cookies.get(COOKIE_NAME)?.value;
+  const isLoggedIn = verifyAdminSession(token);
+
+  // Login แล้ว ห้ามกลับหน้า Login
   if (isLoggedIn && path === "/admin/login") {
     return NextResponse.redirect(new URL("/admin", req.url));
   }
 
-  // ✅ 2. อนุญาตหน้า login (คนที่ยังไม่ login)
+  // อนุญาตหน้า Login
   if (path === "/admin/login") {
     return NextResponse.next();
   }
 
-  // 🔒 3. กันหน้า admin
-  if (!isLoggedIn && path.startsWith("/admin")) {
+  // ป้องกันหน้า Admin
+  if (path.startsWith("/admin") && !isLoggedIn) {
     return NextResponse.redirect(new URL("/admin/login", req.url));
   }
 
-  // ✅ 4. อื่น ๆ ผ่านได้
   return NextResponse.next();
 }
+
+export const config = {
+  matcher: ["/admin/:path*"],
+};

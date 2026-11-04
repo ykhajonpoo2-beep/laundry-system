@@ -3,8 +3,11 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
+
 type Machine = {
   id: number;
+  machineType: "washer" | "dryer";
+  capacityKg: number;
   status: "available" | "running" | "paused";
   endTime: number | null;
   remainingTime?: number;
@@ -14,10 +17,11 @@ type Machine = {
   paymentProgram?: number;
 };
 
+
 export default function HomePage() {
   const router = useRouter();
   const [machines, setMachines] = useState<Machine[]>([]);
-
+const [isAdmin, setIsAdmin] = useState(false);
   const fetchMachines = async () => {
     try {
       const res = await fetch("/api/machines", { cache: "no-store" });
@@ -27,7 +31,36 @@ export default function HomePage() {
       console.error(err);
     }
   };
+useEffect(() => {
+  const checkAdmin = async () => {
+    try {
+      const res = await fetch("/api/admin/check", {
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+      });
 
+      setIsAdmin(res.ok);
+    } catch (error) {
+      console.error("Admin check error:", error);
+      setIsAdmin(false);
+    }
+  };
+
+  checkAdmin();
+}, []);
+const handleAdminLogout = async () => {
+  try {
+    await fetch("/api/admin/logout", {
+      method: "POST",
+      credentials: "same-origin",
+    });
+
+    window.location.href = "/admin/login";
+  } catch (error) {
+    console.error("Logout error:", error);
+  }
+};
   useEffect(() => {
     fetchMachines();
     const i = setInterval(fetchMachines, 3000);
@@ -46,40 +79,64 @@ export default function HomePage() {
     return 0;
   };
 
-  const isWasher = (id: number) => id <= 2;
+  const isWasher = (m: Machine) => m.machineType === "washer";
+const getSizeLabel = (m: Machine) => {
+  if (m.machineType === "dryer") return "Dryer S";
+
+  if (m.capacityKg === 9) return "Washer S";
+  if (m.capacityKg === 15) return "Washer M";
+  if (m.capacityKg === 24) return "Washer L";
+
+  return "Washer";
+};
+
   const [loadingId, setLoadingId] = useState<number | null>(null);
   return (
     <main className="min-h-screen bg-gray-200 p-4">
-      <h1 className="text-xl font-bold mb-4">ร้านซัก</h1>
+      <div className="flex items-center justify-between">
+  <div className="flex items-center gap-2">
+    <h1>ร้านซัก</h1>
+
+    {isAdmin && (
+      <span className="text-xs font-bold text-orange-600 border border-orange-300 rounded px-2 py-1">
+        TEST MODE
+      </span>
+    )}
+  </div>
+
+  {isAdmin && (
+    <button
+      type="button"
+      onClick={handleAdminLogout}
+      className="text-sm text-red-600 font-semibold"
+    >
+      Logout
+    </button>
+  )}
+</div>
 
       <div className="grid grid-cols-2 gap-4">
         {machines.map((m) => {
           const running = m.status === "running";
           const paused = m.status === "paused";
-          const washer = isWasher(m.id);
+          const washer = isWasher(m);
 const waiting = m.waitingPayment;
           return (
             <div
               key={m.id}
 onClick={() => {
+  if (isAdmin) {
+    router.push(`/machine/${m.id}`);
+    return;
+  }
 
-  setLoadingId(m.id);
-
-  setTimeout(() => {
-
-    if (m.waitingPayment) {
-
-      router.push(`/machine/${m.id}/payment`);
-
-    } else {
-
-      router.push(`/machine/${m.id}`);
-
-    }
-
-  },300);
-
+  router.push(
+    m.waitingPayment
+      ? `/machine/${m.id}/payment`
+      : `/machine/${m.id}`
+  );
 }}
+
              className={`  relative   // 👈 เพิ่มตรงนี้
   rounded-2xl p-4 cursor-pointer transition-all
   flex flex-col items-center text-center
@@ -102,9 +159,18 @@ onClick={() => {
     {washer ? "ซักผ้า" : "อบผ้า"}
   </span>
 
-  <div className="text-sm font-semibold">
-    เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.{String(m.id).padStart(2, "0")}
-  </div>
+ <div className="text-sm font-semibold">
+  เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.
+  {String(m.id).padStart(2, "0")}
+</div>
+
+<div className="text-sm font-medium text-gray-500">
+  {getSizeLabel(m)}
+</div>
+
+<div className="text-xs mt-1">
+  {m.capacityKg} กก.
+</div>
 </div>
               {/* 🔥 รูปเครื่อง */}
               <div className="w-20 h-20 relative flex items-center justify-center my-2">

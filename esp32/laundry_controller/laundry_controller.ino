@@ -1,8 +1,7 @@
 #include <WiFi.h>
 #include <HTTPClient.h>
+#include "secrets.h"
 
-const char* ssid = "NAVANARA_2.4G";
-const char* password = "yuthapong0856771876";
 
 const char* serverUrl =
   "https://laundry-system-one.vercel.app";
@@ -25,6 +24,69 @@ unsigned long lastPoll = 0;
 unsigned long lastAlive = 0;
 unsigned long lastDoneTrigger = 0;
 unsigned long remainingTime = 0;
+struct ProgramConfig {
+  int durationSeconds;
+  int jog;
+  int temp;
+  int rev;
+};
+
+// ค่าเริ่มต้น JOG / TEMP / REV ตามที่ยืนยัน
+const ProgramConfig washer9[] = {
+  {1020, 4,  0, 3},  // 1 ซักด่วน น้ำเย็น 17 นาที
+  {1140, 1,  2, 3},  // 2 ซักด่วน น้ำอุ่น 19 นาที
+  {3600, 12, 2, 0},  // 3 ซักทั่วไป น้ำเย็น 60 นาที
+  {4200, 4,  0, 3},  // 4 ซักทั่วไป น้ำอุ่น 70 นาที
+  {5400, 1,  2, 3},  // 5 ซักทั่วไป น้ำร้อน 90 นาที
+  {900,  12, 2, 0},  // 6 ล้าง ปั่นหมาด 15 นาที
+  {7200, 4,  0, 3}   // 7 ล้างเครื่อง 120 นาที
+};
+
+const ProgramConfig washer15[] = {
+  {2400, 4, 0, 3},
+  {3600, 1, 2, 3},
+  {4200, 12, 2, 0},
+  {4800, 4, 0, 3},
+  {4800, 1, 2, 3}
+};
+
+const ProgramConfig washer25[] = {
+  {2400, 4, 0, 3},
+  {3600, 1, 2, 3},
+  {4200, 12, 2, 0},
+  {4800, 4, 0, 3},
+  {4800, 1, 2, 3}
+};
+
+const ProgramConfig dryer9[] = {
+  {1800, 4, 0, 3},
+  {4800, 1, 2, 3},
+  {5400, 12, 2, 0}
+};
+
+ProgramConfig getProgramConfig(int machineId, int programId) {
+  if (machineId >= 1 && machineId <= 4 &&
+      programId >= 1 && programId <= 7) {
+    return washer9[programId - 1];
+  }
+
+  if (machineId >= 5 && machineId <= 6 &&
+      programId >= 1 && programId <= 5) {
+    return washer15[programId - 1];
+  }
+
+  if (machineId >= 7 && machineId <= 8 &&
+      programId >= 1 && programId <= 5) {
+    return washer25[programId - 1];
+  }
+
+  if (machineId >= 9 && machineId <= 12 &&
+      programId >= 1 && programId <= 3) {
+    return dryer9[programId - 1];
+  }
+
+  return {0, 0, 0, 0}; // โปรแกรมไม่ถูกต้อง
+}
 void pulsePin(int pin, int ms = 300) {
   digitalWrite(pin, HIGH);
   delay(ms);
@@ -36,22 +98,22 @@ void pulsePin(int pin, int ms = 300) {
     // A จากก่อน
     digitalWrite(jogB, HIGH);
 
-    delay(100);
+    delay(150);
 
     // B จากตาม ขณะ A ยังจากอยู่
     digitalWrite(jogA, HIGH);
 
-    delay(100);
+    delay(150);
 
     // B กลับก่อน
     digitalWrite(jogB, LOW);
 
-    delay(100);
+    delay(150);
 
     // A กลับทีหลัง
     digitalWrite(jogA, LOW);
 
-    delay(100);
+    delay(150);
   }
 }void pulseMultiple(
   int pin,
@@ -69,7 +131,7 @@ void pulsePin(int pin, int ms = 300) {
   Serial.println("POWER");
   pulsePin(powerPin, 250);
 
-  delay(2000);
+  delay(3000);
 
   Serial.println("JOG");
   jogSequence(jogCount);
@@ -88,35 +150,50 @@ void pulsePin(int pin, int ms = 300) {
 
   Serial.println("START");
   pulsePin(startPin, 250);
-}void runProgramByPrice(int price) {
-  switch (price) {
-    case 20:
-      runWashSequence(4, 0, 0);
-      startMachine(1800);
-      break;
+}bool overrunAlertSent = false;
+bool finishReported = false;
+int currentProgramId = 0;
 
-    case 30:
-      runWashSequence(12, 0, 0);
-      startMachine(2220);
-      break;
-
-    case 40:
-      runWashSequence(7, 0, 0);
-      startMachine(5400);
-      break;
-  }
-}
-// ----------------------
-
-
-// ----------------------
 void startMachine(int duration) {
   Serial.println("START MACHINE");
 
   machineRunning = true;
-  washEndTime =
-    millis() + (duration * 1000);
+  machinePaused = false;
+
+  remainingTime = (unsigned long)duration * 1000UL;
+  washEndTime = millis() + remainingTime;
+
+  overrunAlertSent = false;
+  finishReported = false;
 }
+bool runProgramById(int programId) {
+  ProgramConfig cfg = getProgramConfig(MACHINE_ID, programId);
+
+  if (cfg.durationSeconds <= 0) {
+    Serial.println("INVALID MACHINE OR PROGRAM");
+    return false;
+  }
+
+  Serial.printf(
+    "MACHINE %d PROGRAM %d\n",
+    MACHINE_ID, programId
+  );
+
+  Serial.printf(
+    "DURATION=%d JOG=%d TEMP=%d REV=%d\n",
+    cfg.durationSeconds, cfg.jog, cfg.temp, cfg.rev
+  );
+
+  runWashSequence(cfg.jog, cfg.temp, cfg.rev);
+
+  startMachine(cfg.durationSeconds);
+  return true;
+}
+// ----------------------
+
+
+// ----------------------
+
 
 // ----------------------
 void clearCommand() {
@@ -137,23 +214,25 @@ void clearCommand() {
 void notifyMachineDone() {
   HTTPClient http;
   http.setTimeout(5000);
+
   String url = String(serverUrl) + "/api/machine-done";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-esp32-token", ESP32_API_TOKEN);
 
   String body =
-  "{\"machineId\":" +
-  String(MACHINE_ID) +
-  "}";
+    "{\"machineId\":" +
+    String(MACHINE_ID) +
+    "}";
 
   int code = http.POST(body);
 
-Serial.print("DONE HTTP=");
-Serial.println(code);
+  Serial.print("DONE HTTP=");
+  Serial.println(code);
+
   http.end();
 }
-
 
 // 🔥 แจ้ง power
 void notifyPower() {
@@ -177,7 +256,9 @@ void notifyStarted(int duration) {
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
-  String body = String("{\"machineId\":1,\"duration\":") + duration + "}";
+  String body =
+  "{\"machineId\":" + String(MACHINE_ID) +
+  ",\"duration\":" + String(duration) + "}";
 
   http.POST(body);
   http.end();
@@ -252,38 +333,39 @@ clearCommand();
 }
 
 else if (
- payload.indexOf("\"command\":\"start\"") >= 0
- && !machineRunning
-)
-{
-    Serial.println("START");
+  payload.indexOf("\"command\":\"start\"") >= 0 &&
+  !machineRunning &&
+  !machinePaused
+) {
+  Serial.println("START COMMAND");
 
-    int duration = 1800;
+  int programId = 0;
 
-    if (payload.indexOf("\"program\":1") >= 0)
-    {
-        runProgramByPrice(20);
-        duration = 1800;
+  int pos = payload.indexOf("\"program\":");
+
+  if (pos >= 0) {
+    int start = pos + 10;
+
+    while (start < payload.length() &&
+           payload[start] == ' ') {
+      start++;
     }
 
-    else if (payload.indexOf("\"program\":2") >= 0)
-    {
-        runProgramByPrice(30);
-        duration = 2220;
+    programId = payload.substring(start).toInt();
+  }
+
+  if (programId > 0) {
+    if (runProgramById(programId)) {
+      notifyStarted(getProgramConfig(
+        MACHINE_ID, programId
+      ).durationSeconds);
+
+      currentProgramId = programId;
+      clearCommand();
     }
-
-    else if (payload.indexOf("\"program\":3") >= 0)
-    {
-        runProgramByPrice(40);
-        duration = 5400;
-    }
-
-    notifyStarted(duration);
-
-    machineRunning = true;
-    machinePaused = false;
-
-    clearCommand();
+  } else {
+    Serial.println("INVALID PROGRAM ID");
+  }
 }
 
 else if (payload.indexOf("\"command\":\"pause\"") >= 0) {
@@ -320,15 +402,39 @@ else if (payload.indexOf("\"command\":\"resume\"") >= 0) {
 
 // ----------------------
 void checkFinish() {
-  if (machineRunning && millis() >= washEndTime) {
-    Serial.println("WASH DONE");
+  // ตรวจสอบเฉพาะเมื่อเครื่องกำลังทำงาน
+  if (!machineRunning || machinePaused) return;
+
+  // รอจน Timer หมด
+  if (millis() < washEndTime) return;
+
+  int ldrState = digitalRead(machineDonePin);
+
+  // LOW = เครื่องยังทำงาน
+  if (ldrState == LOW) {
+    if (!overrunAlertSent) {
+      Serial.println("WARNING: MACHINE OVERTIME");
+
+      overrunAlertSent = true;
+      notifyMachineOvertime();
+    }
+
+    return;
+  }
+
+  // HIGH = เครื่องหยุดทำงานแล้ว
+  if (ldrState == HIGH && !finishReported) {
+    Serial.println("MACHINE DONE");
 
     machineRunning = false;
+    machinePaused = false;
     remainingTime = 0;
+    finishReported = true;
 
     notifyMachineDone();
   }
 }
+
 bool lastLidState = true;
 
 void sendLidStatus(bool closed) {
@@ -339,7 +445,9 @@ void sendLidStatus(bool closed) {
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
 
-  String body = String("{\"machineId\":1,\"closed\":") + (closed ? "true" : "false") + "}";
+  String body =
+  "{\"machineId\":" + String(MACHINE_ID) +
+  ",\"closed\":" + String(closed ? "true" : "false") + "}";
 
   int code = http.POST(body);
 
@@ -415,7 +523,7 @@ if (millis() - lastAlive > 60000) {
 
   lastAlive = millis();
 }
-  checkFinish();
+
 int doneState = digitalRead(machineDonePin);
 int lidState = digitalRead(lidPin);
 
@@ -433,33 +541,7 @@ Serial.println(doneState);
 Serial.print("LID PIN = ");
 Serial.println(lidState);
 
-// ตรวจเครื่องซักเสร็จ (LDR)
-static unsigned long doneHighStart = 0;
-
-if (doneState == HIGH)
-{
-    if (doneHighStart == 0)
-        doneHighStart = millis();
-
-    if (
-        millis() - doneHighStart > 3000 &&
-        lastDoneState == LOW
-    )
-    {
-        Serial.println("PIN DONE");
-
-        machineRunning = false;
-        machinePaused = false;
-
-        notifyMachineDone();
-    }
-}
-else
-{
-    doneHighStart = 0;
-}
-
-lastDoneState = doneState;
+checkFinish();
 
   delay(200);
 }

@@ -7,11 +7,39 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { useRef } from "react";
-const programs: Record<string, any> = {
-  "1": { name: "ซักด่วน", price: 20, duration: 1800 },
-  "2": { name: "ซักด่วน น้ำอุ่น", price: 30, duration: 2220 },
-  "3": { name: "ซักหนัก น้ำร้อน", price: 40, duration: 5400 },
+
+const programs: Record<string, {
+  name: string;
+  price: number;
+  duration: number;
+}> = {
+  "1": {
+    name: "ซักด่วน น้ำเย็น",
+    price: 20,
+    duration: 17 * 60,
+  },
+  "2": {
+    name: "ซักด่วน น้ำอุ่น",
+    price: 30,
+    duration: 19 * 60,
+  },
+  "3": {
+    name: "ซักทั่วไป น้ำเย็น",
+    price: 40,
+    duration: 60 * 60,
+  },
+  "4": {
+    name: "ซักทั่วไป น้ำอุ่น",
+    price: 50,
+    duration: 70 * 60,
+  },
+  "5": {
+    name: "ซักทั่วไป น้ำร้อน",
+    price: 60,
+    duration: 90 * 60,
+  },
 };
+
 
 export default function PaymentPage() {
   const { id } = useParams();
@@ -34,6 +62,8 @@ const [chargeId, setChargeId] =
 const [phone, setPhone] = useState("");
 const [canRedeem, setCanRedeem] = useState(false);
 const [waitingPayment, setWaitingPayment] = useState(true);
+const [paymentMessage, setPaymentMessage] = useState("");
+const [manualReview, setManualReview] = useState(false);
 // ✅ เพิ่มตรงนี้
 const [showPhonePopup, setShowPhonePopup] = useState(false);
   const isProgram1 = programId === "1";
@@ -54,22 +84,6 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   link.href = canvas.toDataURL();
   link.click();
 };
-  useEffect(() => {
-    if (paid) return;
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          router.push(`/machine/${id}`);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [paid, id, router]);
-
   // ----------------------
   // CHECK LID
   // ----------------------
@@ -110,29 +124,7 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   // ----------------------
   // PAYMENT
   // ----------------------
-  const confirmPayment = async () => {
-  try {
-    const res = await fetch("/api/start-machine", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-  machineId: Number(id),
-  programId: Number(programId),
-  price: program.price,
-  isFree: false,
-}),
-    });
 
-    if (!res.ok) throw new Error();
-
-    setPaid(true); // ✅ ย้ายมาหลังสำเร็จ
-
-  } catch {
-    alert("ผิดพลาด");
-  }
-};
 
   // ----------------------
   // REDEEM
@@ -215,7 +207,7 @@ useEffect(() => {
     try {
 
       const res = await fetch(
-        `/api/payment-session?machineId=${id}`
+        `/api/payment-session?machineId=${id}&programId=${programId}`
       );
 
       const data = await res.json();
@@ -224,10 +216,12 @@ useEffect(() => {
 
         setQrCodeUrl(data.qrCodeUrl);
         setChargeId(data.chargeId);
-        setTimeLeft(data.remain);
-        setUiExpireAt(
-          new Date(data.uiExpireAt).getTime()
-        );
+        const expireAt = new Date(data.uiExpireAt).getTime();
+
+setUiExpireAt(expireAt);
+setTimeLeft(
+  Math.max(0, Math.floor((expireAt - Date.now()) / 1000))
+);
 
         return;
       }
@@ -240,9 +234,10 @@ useEffect(() => {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            machineId: Number(id),
-            program: program.price,
-          }),
+          machineId: Number(id),
+          programId: Number(programId),
+        }),
+
         }
       );
 
@@ -252,8 +247,12 @@ useEffect(() => {
 
       setQrCodeUrl(charge.qrCodeUrl);
       setChargeId(charge.chargeId);
-      setUiExpireAt(charge.uiExpireAt);
-      setTimeLeft(300);
+      const expireAt = Number(charge.uiExpireAt);
+
+setUiExpireAt(expireAt);
+setTimeLeft(
+  Math.max(0, Math.floor((expireAt - Date.now()) / 1000))
+);
 
     } catch (err) {
 
@@ -265,7 +264,7 @@ useEffect(() => {
 
   loadSession();
 
-}, [id]);   // ✅ จบตรงนี้
+}, [id, programId]);  // ✅ จบตรงนี้
 useEffect(() => {
 
   if (!uiExpireAt) return;
@@ -292,66 +291,128 @@ useEffect(() => {
   return () => clearInterval(timer);
 
 }, [uiExpireAt, id, router]);
-useEffect(() => {
-  if (!chargeId || paid) return;
 
-  const interval = setInterval(async () => {
+useEffect(() => {
+  if (!chargeId || paid || manualReview) return;
+
+  let active = true;
+  let checking = false;
+
+  const checkPayment = async () => {
+    if (checking || !active) return;
+
+    checking = true;
+
     try {
-      const res = await fetch(
-        "/api/omise/check-charge",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            chargeId,
-          }),
-        }
-      );
+      const res = await fetch("/api/omise/check-charge", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ chargeId }),
+        cache: "no-store",
+      });
 
       const data = await res.json();
 
-      if (data.paid) {
-        clearInterval(interval);
+      if (!active) return;
 
-        await confirmPayment();
+      if (data.manualReview) {
+        setManualReview(true);
+        setWaitingPayment(false);
+        setPaymentMessage(
+          data.message ||
+            "ชำระเงินแล้ว แต่ต้องให้เจ้าของร้านตรวจสอบก่อนเริ่มเครื่อง"
+        );
+        return;
       }
-    } catch (err) {
-      console.error(err);
+
+      if (data.started === true) {
+        setPaid(true);
+        setWaitingPayment(false);
+        setPaymentMessage("ชำระเงินสำเร็จ กำลังเปิดหน้าเครื่อง...");
+        router.replace(`/machine/${id}`);
+        return;
+      }
+
+      if (data.status === "cancelled") {
+        setWaitingPayment(false);
+        setPaymentMessage("รายการชำระเงินนี้ถูกยกเลิกแล้ว");
+      }
+    } catch (error) {
+      console.error("ตรวจสอบการชำระเงินไม่สำเร็จ:", error);
+    } finally {
+      checking = false;
     }
+  };
+
+  void checkPayment();
+
+  const interval = setInterval(() => {
+    void checkPayment();
   }, 5000);
 
-  return () => clearInterval(interval);
-}, [chargeId, paid]);
+  return () => {
+    active = false;
+    clearInterval(interval);
+  };
+}, [chargeId, paid, manualReview, id, router]);
+if (!program) {
+  return (
+    <main className="min-h-screen p-4">
+      <p className="text-red-600">
+        ไม่พบโปรแกรมนี้ กรุณากลับไปเลือกโปรแกรมใหม่
+      </p>
+      <button
+        onClick={() => router.replace(`/machine/${id}`)}
+        className="mt-3 rounded-lg bg-black px-4 py-2 text-white"
+      >
+        กลับไปเลือกโปรแกรม
+      </button>
+    </main>
+  );
+}
   return (
     <main className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-md mx-auto bg-white p-6 rounded-2xl shadow">
+
 <button
-
   onClick={async () => {
+    try {
+      if (!chargeId) {
+        router.push(`/machine/${id}`);
+        return;
+      }
 
-  await fetch(
-    "/api/payment-session/cancel",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        machineId: Number(id),
-      }),
+      const res = await fetch("/api/payment-session/cancel", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          machineId: Number(id),
+          chargeId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        alert(data.error || "ยกเลิกรายการไม่สำเร็จ");
+        return;
+      }
+
+      router.replace(`/machine/${id}`);
+    } catch (error) {
+      console.error("Cancel payment error:", error);
+      alert("ไม่สามารถยกเลิกรายการได้ กรุณาลองอีกครั้ง");
     }
-  );
-
-  router.push(`/machine/${id}`);
-
-}}
+  }}
   className="mb-4 text-sm"
 >
   ← ย้อนกลับ
 </button>
+
         {!lidClosed && (
           <p className="text-red-500 mb-2 font-bold">
             ❗ กรุณาปิดฝาเครื่อง
@@ -408,17 +469,15 @@ useEffect(() => {
         <p className="text-center mb-4">
           ชำระภายใน {timeLeft} วินาที
         </p>
-
-        <button
-          onClick={confirmPayment}
-          disabled={!lidClosed || paid}
-          className="w-full bg-black text-white py-3 rounded-xl disabled:opacity-50"
-        >
-          {paid ? "กำลังดำเนินการ..." : "ทดสอบชำระเงิน"}
-        </button>
-{waitingPayment && !paid && (
+{waitingPayment && !paid && !manualReview && (
   <p className="text-yellow-500 text-center">
     ⏳ รอการชำระเงิน...
+  </p>
+)}
+
+{paymentMessage && (
+  <p className="mt-3 text-center text-sm text-amber-700">
+    {paymentMessage}
   </p>
 )}
 

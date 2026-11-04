@@ -4,92 +4,183 @@ import clientPromise from "@/lib/mongodb";
 const MAX_POINTS = 5;
 
 export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
-  const phone = searchParams.get("phone");
+  try {
+    const { searchParams } = new URL(req.url);
+    const phone = searchParams.get("phone");
 
-  if (!phone) {
-    return NextResponse.json({ error: "phone required" }, { status: 400 });
+    if (!phone) {
+      return NextResponse.json(
+        { error: "phone required" },
+        { status: 400 }
+      );
+    }
+
+    const client = await clientPromise;
+    const db = client.db("laundry");
+
+    const user = await db.collection("customers").findOne({ phone });
+    const points = Number(user?.points ?? 0);
+
+    return NextResponse.json({
+      phone,
+      points,
+      canRedeem: points >= MAX_POINTS,
+    });
+  } catch (error) {
+    console.error("GET /api/points error:", error);
+
+    return NextResponse.json(
+      { error: "ไม่สามารถตรวจสอบแต้มได้" },
+      { status: 500 }
+    );
   }
-
-  const client = await clientPromise;
-  const db = client.db("laundry");
-
-  const user = await db.collection("customers").findOne({ phone });
-
-  return NextResponse.json({
-    phone,
-    points: user?.points || 0,
-    canRedeem: (user?.points || 0) >= MAX_POINTS,
-  });
-  return NextResponse.json({
-  version: "MONGODB OK",
-});
 }
 
 // ----------------------
-// POST → เพิ่มแต้ม
+// POST → เพิ่มแต้ม 1 แต้มต่อรอบซัก
+// ใช้ cycleId ป้องกันการรับแต้มซ้ำ
 // ----------------------
 export async function POST(req: Request) {
-  const { phone, machineId, startTime } = await req.json();
+  try {
+    const { phone, machineId, cycleId } = await req.json();
 
-  const client = await clientPromise;
-  const db = client.db("laundry");
+    const cleanPhone = String(phone ?? "").replace(/\D/g, "");
+    const id = Number(machineId);
+    const cycle = String(cycleId ?? "").trim();
 
-  const key = `${machineId}-${startTime}`;
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return NextResponse.json(
+        { error: "กรุณากรอกเบอร์โทรศัพท์ 10 หลัก" },
+        { status: 400 }
+      );
+    }
 
-  // 🔥 กันซ้ำ
-  const existing = await db.collection("claims").findOne({ key });
+    if (!Number.isInteger(id) || id < 1 || !cycle) {
+      return NextResponse.json(
+        { error: "ข้อมูลเครื่องหรือรอบซักไม่ถูกต้อง" },
+        { status: 400 }
+      );
+    }
 
-  if (existing) {
-    return NextResponse.json({ error: "already claimed" }, { status: 400 });
+    const client = await clientPromise;
+    const db = client.db("laundry");
+    const claims = db.collection("claims");
+    const customers = db.collection("customers");
+
+    // ป้องกันคำขอซ้ำ แม้เกิดพร้อมกันหลายคำขอ
+    // หากมี key ซ้ำอยู่แล้ว MongoDB จะปฏิเสธด้วย duplicate key
+    await claims.createIndex({ key: 1 }, { unique: true });
+
+    const key = `${id}-${cycle}`;
+
+    try {
+      await claims.insertOne({
+        key,
+        machineId: id,
+        cycleId: cycle,
+        phone: cleanPhone,
+        claimedAt: new Date(),
+      });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        return NextResponse.json(
+          { error: "รอบซักนี้รับแต้มไปแล้ว" },
+          { status: 409 }
+        );
+      }
+
+      throw error;
+    }
+
+    await customers.updateOne(
+      { phone: cleanPhone },
+      {
+        $inc: { points: 1 },
+        $set: { updatedAt: new Date() },
+        $setOnInsert: { createdAt: new Date() },
+      },
+      { upsert: true }
+    );
+
+    const user = await customers.findOne({ phone: cleanPhone });
+    const points = Number(user?.points ?? 0);
+
+    return NextResponse.json({
+      success: true,
+      message: "point added",
+      points,
+      canRedeem: points >= MAX_POINTS,
+    });
+  } catch (error) {
+    console.error("POST /api/points error:", error);
+
+    return NextResponse.json(
+      { error: "ไม่สามารถบันทึกแต้มได้" },
+      { status: 500 }
+    );
   }
-
-  await db.collection("claims").insertOne({ key });
-
-  await db.collection("customers").updateOne(
-    { phone },
-    {
-      $inc: { points: 1 },
-      $set: { updatedAt: new Date() },
-    },
-    { upsert: true }
-  );
-
-  const user = await db.collection("customers").findOne({ phone });
-
-  return NextResponse.json({
-    message: "point added",
-    points: user?.points || 0,
-  });
 }
 
 // ----------------------
-// PUT → ใช้สิทธิ
+// PUT → ใช้ 5 แต้มแลกซักฟรี
 // ----------------------
 export async function PUT(req: Request) {
-  const { phone, program } = await req.json();
+  try {
+    const { phone, program } = await req.json();
+    const cleanPhone = String(phone ?? "").replace(/\D/g, "");
 
-  if (program !== 1) {
-    return NextResponse.json({ error: "only program 1" }, { status: 400 });
-  }
-
-  const client = await clientPromise;
-  const db = client.db("laundry");
-
-  const user = await db.collection("customers").findOne({ phone });
-
-  if (!user || user.points < MAX_POINTS) {
-    return NextResponse.json({ error: "not enough points" }, { status: 400 });
-  }
-
-  await db.collection("customers").updateOne(
-    { phone },
-    {
-      $inc: { points: -MAX_POINTS }, // 🔥 หักแต้ม
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return NextResponse.json(
+        { error: "กรุณากรอกเบอร์โทรศัพท์ 10 หลัก" },
+        { status: 400 }
+      );
     }
-  );
 
-  return NextResponse.json({
-    message: "redeemed",
-  });
+    if (Number(program) !== 1) {
+      return NextResponse.json(
+        { error: "ใช้สิทธิได้เฉพาะโปรแกรม 1" },
+        { status: 400 }
+      );
+    }
+
+    const client = await clientPromise;
+    const db = client.db("laundry");
+
+    // หักแต้มเฉพาะเมื่อมีอย่างน้อย 5 แต้ม
+    // ป้องกันแต้มติดลบเมื่อมีการแลกพร้อมกัน
+    const result = await db.collection("customers").updateOne(
+      {
+        phone: cleanPhone,
+        points: { $gte: MAX_POINTS },
+      },
+      {
+        $inc: { points: -MAX_POINTS },
+        $set: { updatedAt: new Date() },
+      }
+    );
+
+    if (result.modifiedCount !== 1) {
+      return NextResponse.json(
+        { error: "แต้มไม่เพียงพอสำหรับแลกสิทธิ" },
+        { status: 400 }
+      );
+    }
+
+    const user = await db.collection("customers").findOne({
+      phone: cleanPhone,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "redeemed",
+      points: Number(user?.points ?? 0),
+    });
+  } catch (error) {
+    console.error("PUT /api/points error:", error);
+
+    return NextResponse.json(
+      { error: "ไม่สามารถใช้สิทธิได้" },
+      { status: 500 }
+    );
+  }
 }

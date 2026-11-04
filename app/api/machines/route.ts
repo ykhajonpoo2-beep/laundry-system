@@ -21,18 +21,13 @@ export async function GET() {
     );
 
     if (timeLeft <= 0) {
-      updated = true;
-
-      return {
-        ...m,
-        status: "available",
-        command: "none",
-        endTime: null,
-        timeLeft: 0,
-        isFree: false,
-        program: 0,
-      };
-    }
+  return {
+    ...m,
+    status: "running",
+    overtime: m.overtime ?? false,
+    timeLeft: 0,
+  };
+}
   }
 
   if (m.status === "paused") {
