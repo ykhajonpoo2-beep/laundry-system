@@ -1,9 +1,13 @@
+
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import {
   getMachines,
   saveMachines,
 } from "@/lib/machineDB";
+import {
+  getMachineProgram,
+} from "@/lib/programConfig";
 
 export async function POST(req: Request) {
   try {
@@ -14,19 +18,48 @@ export async function POST(req: Request) {
       isFree,
     } = await req.json();
 
+    const id = Number(machineId);
+    const selectedProgramId = Number(programId);
+
+    if (!Number.isInteger(id) || id < 1) {
+      throw new Error("รหัสเครื่องไม่ถูกต้อง");
+    }
+
+    if (
+      !Number.isInteger(selectedProgramId) ||
+      selectedProgramId < 1
+    ) {
+      throw new Error("รหัสโปรแกรมไม่ถูกต้อง");
+    }
+
+    // การซักฟรีต้องผ่าน API /api/redeem เท่านั้น
+    if (isFree === true) {
+      throw new Error(
+        "กรุณาใช้ระบบแลกสิทธิซักฟรีผ่าน /api/redeem"
+      );
+    }
+
     const machines = await getMachines();
 
     const machine = machines.find(
-      (m: any) => m.id === Number(machineId)
+      (m: any) => Number(m.id) === id
     );
 
     if (!machine) {
       throw new Error("ไม่พบเครื่องนี้");
     }
 
-    if (!machine.lidClosed) {
-      throw new Error("กรุณาปิดฝาเครื่องก่อน");
+    if (
+      machine.machineType !== "washer" &&
+      machine.machineType !== "dryer"
+    ) {
+      throw new Error("ประเภทเครื่องไม่ถูกต้อง");
     }
+
+    // ตรวจสอบฝาทุกประเภทเครื่อง ทั้งเครื่องซักและเครื่องอบ
+if (machine.lidClosed !== true) {
+  throw new Error("กรุณาปิดฝาเครื่องก่อน");
+}
 
     if (
       machine.status === "running" ||
@@ -35,54 +68,40 @@ export async function POST(req: Request) {
       throw new Error("เครื่องกำลังทำงานหรือหยุดชั่วคราว");
     }
 
-    const isWasher9 =
-      machine.machineType === "washer" &&
-      Number(machine.capacityKg) === 9;
+    const selectedProgram = getMachineProgram(
+      machine.machineType,
+      Number(machine.capacityKg),
+      selectedProgramId
+    );
 
-    // เวลาเป็นวินาที
-    const washer9DurationMap: Record<number, number> = {
-      1: 17 * 60,
-      2: 19 * 60,
-      3: 60 * 60,
-      4: 70 * 60,
-      5: 90 * 60,
-    };
+    if (!selectedProgram) {
+      throw new Error("ไม่พบโปรแกรมของเครื่องนี้");
+    }
 
-    // เวลาโปรแกรมเดิม สำหรับเครื่องที่ยังไม่ได้แยกชุดโปรแกรม
-    const legacyDurationMap: Record<number, number> = {
-      1: 1800,
-      2: 2220,
-      3: 5400,
-    };
+    const finalPrice = Number(price);
 
-    const selectedProgramId = Number(programId);
-
-    const durationMap = isWasher9
-      ? washer9DurationMap
-      : legacyDurationMap;
-
-    const duration = isFree
-      ? washer9DurationMap[1]
-      : durationMap[selectedProgramId];
-
-    if (!duration) {
-      throw new Error("ไม่พบเวลาโปรแกรมที่เลือก");
+    if (
+      !Number.isFinite(finalPrice) ||
+      finalPrice !== selectedProgram.price
+    ) {
+      throw new Error("ราคาของโปรแกรมไม่ถูกต้อง");
     }
 
     // สร้างรหัสใหม่เฉพาะตอนเริ่มรอบใหม่
     const cycleId = randomUUID();
 
     const updated = machines.map((m: any) => {
-      if (m.id !== Number(machineId)) return m;
+      if (Number(m.id) !== id) return m;
 
       return {
         ...m,
         status: "running",
         command: "start",
-        program: isFree ? 1 : selectedProgramId,
-        price: Number(price),
-        endTime: Date.now() + duration * 1000,
-        isFree: Boolean(isFree),
+        program: selectedProgramId,
+        price: finalPrice,
+        endTime:
+          Date.now() + selectedProgram.durationSeconds * 1000,
+        isFree: false,
         cycleId,
       };
     });
@@ -91,7 +110,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      duration,
+      duration: selectedProgram.durationSeconds,
       cycleId,
     });
   } catch (error) {

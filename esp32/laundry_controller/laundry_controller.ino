@@ -6,7 +6,7 @@
 const char* serverUrl =
   "https://laundry-system-one.vercel.app";
 
-#define MACHINE_ID 1
+#define MACHINE_ID 3
 
 const int powerPin = 4;
 const int jogA = 5;
@@ -59,7 +59,7 @@ const ProgramConfig washer25[] = {
 };
 
 const ProgramConfig dryer9[] = {
-  {1800, 4, 0, 3},
+  {1800, 3, 0, 0},
   {4800, 1, 2, 3},
   {5400, 12, 2, 0}
 };
@@ -152,6 +152,8 @@ void pulsePin(int pin, int ms = 300) {
   pulsePin(startPin, 250);
 }bool overrunAlertSent = false;
 bool finishReported = false;
+bool finishPending = false;
+unsigned long lastDoneNotifyAttempt = 0;
 int currentProgramId = 0;
 
 void startMachine(int duration) {
@@ -165,6 +167,8 @@ void startMachine(int duration) {
 
   overrunAlertSent = false;
   finishReported = false;
+  finishPending = false;
+  lastDoneNotifyAttempt = 0;
 }
 bool runProgramById(int programId) {
   ProgramConfig cfg = getProgramConfig(MACHINE_ID, programId);
@@ -196,22 +200,33 @@ bool runProgramById(int programId) {
 
 
 // ----------------------
-void clearCommand() {
+void clearCommand(const String& ackCommand) {
   HTTPClient http;
   http.setTimeout(5000);
+
   String url = String(serverUrl) + "/api/machine-command";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-esp32-token", ESP32_API_TOKEN);
 
-  String body = "{\"machineId\":1,\"command\":\"none\"}";
+  String body =
+    "{\"machineId\":" + String(MACHINE_ID) +
+    ",\"command\":\"none\"" +
+    ",\"ackCommand\":\"" + ackCommand + "\"}";
 
-  http.POST(body);
+  int code = http.POST(body);
+
+  Serial.print("ACK ");
+  Serial.print(ackCommand);
+  Serial.print(" HTTP=");
+  Serial.println(code);
+
   http.end();
 }
 
 // ----------------------
-void notifyMachineDone() {
+bool notifyMachineDone() {
   HTTPClient http;
   http.setTimeout(5000);
 
@@ -232,35 +247,50 @@ void notifyMachineDone() {
   Serial.println(code);
 
   http.end();
+
+  return code == 200;
 }
 
 // 🔥 แจ้ง power
 void notifyPower() {
   HTTPClient http;
   http.setTimeout(5000);
-  http.begin(String(serverUrl) + "/api/machine-power");
-  http.addHeader("Content-Type", "application/json");
-  String body =
-  "{\"machineId\":" +
-  String(MACHINE_ID) +
-  "}";
 
-http.POST(body);
+  http.begin(String(serverUrl) + "/api/machine-power");
+
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-esp32-token", ESP32_API_TOKEN);
+
+  String body =
+    "{\"machineId\":" + String(MACHINE_ID) + "}";
+
+  int code = http.POST(body);
+
+  Serial.print("POWER HTTP=");
+  Serial.println(code);
+
   http.end();
 }
+
 void notifyStarted(int duration) {
   HTTPClient http;
   http.setTimeout(5000);
+
   String url = String(serverUrl) + "/api/machine-started";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-esp32-token", ESP32_API_TOKEN);
 
   String body =
-  "{\"machineId\":" + String(MACHINE_ID) +
-  ",\"duration\":" + String(duration) + "}";
+    "{\"machineId\":" + String(MACHINE_ID) +
+    ",\"duration\":" + String(duration) + "}";
 
-  http.POST(body);
+  int code = http.POST(body);
+
+  Serial.print("STARTED HTTP=");
+  Serial.println(code);
+
   http.end();
 }
 void notifyPaused() {
@@ -299,139 +329,254 @@ http.POST(body);
 }
 // ----------------------
 void checkCommand() {
+  if (WiFi.status() != WL_CONNECTED) return;
+
   HTTPClient http;
   http.setTimeout(5000);
+
   String url =
     String(serverUrl) +
     "/api/machine-command?id=" +
-String(MACHINE_ID);
+    String(MACHINE_ID);
 
-  http.begin(url);
+    http.begin(url);
+
+  // ส่ง Token เพื่อยืนยันตัวตนกับ Backend
+  http.addHeader("x-esp32-token", ESP32_API_TOKEN);
 
   int code = http.GET();
-Serial.print("POLL CODE = ");
-Serial.println(code);
 
-if (code >= 300 && code < 400) {
-  Serial.print("REDIRECT TO: ");
-  Serial.println(http.getLocation());
-}
   Serial.print("POLL CODE = ");
   Serial.println(code);
 
-  if (code == 200) {
-    String payload = http.getString();
+  if (code != 200) {
+    http.end();
+    return;
+  }
+
+  String payload = http.getString();
+
+  http.end();
+
+  Serial.print("SERVER RESPONSE = ");
   Serial.println(payload);
 
- if (payload.indexOf("\"command\":\"power\"") >= 0) {
-  Serial.println("POWER");
- pulsePin(powerPin, 800);
+  // ----------------------
+  // POWER
+  // ----------------------
+  if (payload.indexOf("\"command\":\"power\"") >= 0) {
+    Serial.println("POWER COMMAND");
 
-notifyPower();   // 🔥 ตัวนี้แหละที่ขาด
+    // Manual POWER pulse
+    pulsePin(powerPin, 800);
 
-clearCommand();
-}
+    // Clear all previous machine cycle states
+    machineRunning = false;
+    machinePaused = false;
+    washEndTime = 0;
+    remainingTime = 0;
 
-else if (
-  payload.indexOf("\"command\":\"start\"") >= 0 &&
-  !machineRunning &&
-  !machinePaused
-) {
-  Serial.println("START COMMAND");
+    overrunAlertSent = false;
+    finishReported = false;
+    finishPending = false;
+    lastDoneNotifyAttempt = 0;
 
-  int programId = 0;
+    currentProgramId = 0;
 
-  int pos = payload.indexOf("\"program\":");
+    Serial.println("POWER: MACHINE STATE RESET");
 
-  if (pos >= 0) {
-    int start = pos + 10;
+    notifyPower();
 
-    while (start < payload.length() &&
-           payload[start] == ' ') {
-      start++;
-    }
-
-    programId = payload.substring(start).toInt();
+    clearCommand("power");
   }
 
-  if (programId > 0) {
+  // ----------------------
+  // START BUTTON
+  // ----------------------
+  else if (
+    payload.indexOf("\"command\":\"start-button\"") >= 0
+  ) {
+    Serial.println("START BUTTON COMMAND");
+
+    bool lidClosed = digitalRead(lidPin) == HIGH;
+
+    if (!lidClosed) {
+      Serial.println("ERROR: LID OPEN");
+      clearCommand("start-button");
+      return;
+    }
+
+    if (!machineRunning && !machinePaused) {
+      pulsePin(startPin, 250);
+      Serial.println("START BUTTON PULSE DONE");
+    }
+
+    clearCommand("start-button");
+  }
+
+  // ----------------------
+  // START PROGRAM
+  // ----------------------
+  else if (
+    payload.indexOf("\"command\":\"start\"") >= 0 &&
+    !machineRunning &&
+    !machinePaused
+  ) {
+    Serial.println("START PROGRAM COMMAND");
+
+    bool lidClosed = digitalRead(lidPin) == HIGH;
+
+    if (!lidClosed) {
+      Serial.println("ERROR: LID OPEN");
+      clearCommand("start");
+      return;
+    }
+
+    int programId = 0;
+
+    int pos = payload.indexOf("\"program\":");
+
+    if (pos >= 0) {
+      int start = pos + 10;
+
+      while (
+        start < payload.length() &&
+        payload[start] == ' '
+      ) {
+        start++;
+      }
+
+      programId = payload.substring(start).toInt();
+    }
+
+    Serial.print("PROGRAM ID = ");
+    Serial.println(programId);
+
+    ProgramConfig cfg =
+      getProgramConfig(MACHINE_ID, programId);
+
+    if (cfg.durationSeconds <= 0) {
+      Serial.println("INVALID PROGRAM");
+      clearCommand("start");
+      return;
+    }
+
     if (runProgramById(programId)) {
-      notifyStarted(getProgramConfig(
-        MACHINE_ID, programId
-      ).durationSeconds);
-
       currentProgramId = programId;
-      clearCommand();
+
+      notifyStarted(cfg.durationSeconds);
+
+      Serial.println("PROGRAM STARTED");
+
+      clearCommand("start");
     }
-  } else {
-    Serial.println("INVALID PROGRAM ID");
-  }
-}
-
-else if (payload.indexOf("\"command\":\"pause\"") >= 0) {
-  Serial.println("PAUSE");
-
-  pulsePin(startPin, 800);
-
-  machineRunning = false;
-  machinePaused = true;
-
-  notifyPaused();   // ✅ เพิ่มบรรทัดนี้
-
-  clearCommand();
-}
-
-else if (payload.indexOf("\"command\":\"resume\"") >= 0) {
-  Serial.println("RESUME");
-
-  pulsePin(startPin, 800);
-
-  machineRunning = true;
-  machinePaused = false;
-
-  notifyResume();   // ✅ เพิ่ม
-
-  clearCommand();
-}
-
-
   }
 
-  http.end(); // ✅ ปิดตรงนี้ (นอก if)
+  // ----------------------
+  // PAUSE
+  // ----------------------
+  else if (
+    payload.indexOf("\"command\":\"pause\"") >= 0
+  ) {
+    Serial.println("PAUSE COMMAND");
+
+    if (machineRunning && !machinePaused) {
+      unsigned long now = millis();
+
+      remainingTime =
+        washEndTime > now
+          ? washEndTime - now
+          : 0;
+
+      pulsePin(startPin, 800);
+
+      machineRunning = false;
+      machinePaused = true;
+
+      Serial.print("REMAINING TIME = ");
+      Serial.println(remainingTime);
+    }
+
+    clearCommand("pause");
+  }
+
+  // ----------------------
+  // RESUME
+  // ----------------------
+  else if (
+    payload.indexOf("\"command\":\"resume\"") >= 0
+  ) {
+    Serial.println("RESUME COMMAND");
+
+    if (machinePaused) {
+      pulsePin(startPin, 800);
+
+      machineRunning = true;
+      machinePaused = false;
+
+      washEndTime = millis() + remainingTime;
+
+      Serial.println("TIMER RESUMED");
+    }
+
+    clearCommand("resume");
+  }
 }
 
 // ----------------------
 void checkFinish() {
-  // ตรวจสอบเฉพาะเมื่อเครื่องกำลังทำงาน
-  if (!machineRunning || machinePaused) return;
+  // ตรวจสอบ Timer และ LDR เฉพาะขณะที่เครื่องกำลังทำงาน
+  if (machineRunning && !machinePaused) {
 
-  // รอจน Timer หมด
-  if (millis() < washEndTime) return;
+    // รอจน Timer หมด
+    if (millis() >= washEndTime) {
 
-  int ldrState = digitalRead(machineDonePin);
+      int ldrState = digitalRead(machineDonePin);
 
-  // LOW = เครื่องยังทำงาน
-  if (ldrState == LOW) {
-    if (!overrunAlertSent) {
-      Serial.println("WARNING: MACHINE OVERTIME");
+      // LOW = เครื่องยังทำงาน
+      if (ldrState == LOW) {
+        if (!overrunAlertSent) {
+          Serial.println("WARNING: MACHINE OVERTIME");
+          overrunAlertSent = true;
+          Serial.println("OVERTIME ALERT");
+        }
 
-      overrunAlertSent = true;
-      notifyMachineOvertime();
+        return;
+      }
+
+      // HIGH = เครื่องหยุดทำงานแล้ว
+      if (ldrState == HIGH && !finishPending && !finishReported) {
+        Serial.println("MACHINE DONE");
+
+        machineRunning = false;
+        machinePaused = false;
+        remainingTime = 0;
+
+        finishPending = true;
+      }
     }
-
-    return;
   }
 
-  // HIGH = เครื่องหยุดทำงานแล้ว
-  if (ldrState == HIGH && !finishReported) {
-    Serial.println("MACHINE DONE");
+  // Retry แจ้งเครื่องเสร็จทุก 10 วินาที
+  if (finishPending && !finishReported) {
 
-    machineRunning = false;
-    machinePaused = false;
-    remainingTime = 0;
-    finishReported = true;
+    if (
+      lastDoneNotifyAttempt == 0 ||
+      millis() - lastDoneNotifyAttempt >= 10000UL
+    ) {
+      lastDoneNotifyAttempt = millis();
 
-    notifyMachineDone();
+      Serial.println("SENDING MACHINE DONE");
+
+      if (notifyMachineDone()) {
+        finishReported = true;
+        finishPending = false;
+
+        Serial.println("MACHINE DONE CONFIRMED");
+      } else {
+        Serial.println("DONE NOTIFY FAILED - RETRY IN 10 SECONDS");
+      }
+    }
   }
 }
 
@@ -440,19 +585,22 @@ bool lastLidState = true;
 void sendLidStatus(bool closed) {
   HTTPClient http;
   http.setTimeout(5000);
+
   String url = String(serverUrl) + "/api/lid-status";
 
   http.begin(url);
   http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-esp32-token", ESP32_API_TOKEN);
 
   String body =
-  "{\"machineId\":" + String(MACHINE_ID) +
-  ",\"closed\":" + String(closed ? "true" : "false") + "}";
+    "{\"machineId\":" + String(MACHINE_ID) +
+    ",\"closed\":" + String(closed ? "true" : "false") + "}";
 
   int code = http.POST(body);
 
-Serial.print("LID HTTP=");
-Serial.println(code);
+  Serial.print("LID HTTP=");
+  Serial.println(code);
+
   http.end();
 }
 

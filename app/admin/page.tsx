@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-
+import { getMachinePrograms, type ProgramConfig } from "@/lib/programConfig";
 import {
   LineChart,
   Line,
@@ -16,9 +16,40 @@ type Machine = {
   id: number;
   status: "available" | "running" | "paused";
   program: number;
-  endTime: number;
+  endTime: number | null;
+  machineType: "washer" | "dryer";
+  capacityKg: number;
+  lidClosed: boolean;
+  command?: string;
+  adminTest?: boolean;
 };
+function getAdminPrograms(machine: Machine): ProgramConfig[] {
+  const programs = getMachinePrograms(
+    machine.machineType,
+    machine.capacityKg
+  );
 
+  // เพิ่มโปรแกรมพิเศษเฉพาะเครื่องซัก 9 กก. ใน Admin Test
+  if (machine.machineType === "washer" && machine.capacityKg === 9) {
+    return [
+      ...programs,
+      {
+        id: 6,
+        name: "ล้าง / ปั่นหมาด",
+        price: 0,
+        durationSeconds: 15 * 60,
+      },
+      {
+        id: 7,
+        name: "ล้างเครื่อง",
+        price: 0,
+        durationSeconds: 120 * 60,
+      },
+    ];
+  }
+
+  return programs;
+}
 export default function AdminPage() {
   const router = useRouter();
 
@@ -28,7 +59,6 @@ const [authorized, setAuthorized] = useState(false);
 const [authChecking, setAuthChecking] = useState(true);
   // ✅ NEW: revenue state
   const [revenueData, setRevenueData] = useState<any[]>([]);
-
   // 🔐 logout
   const logout = async () => {
     await fetch("/api/admin/logout", {
@@ -121,8 +151,13 @@ useEffect(() => {
 
   const revenue = running * 20;
 
-  const sendCommand = async (id: number, command: string) => {
-    await fetch("/api/machine-command", {
+  const sendCommand = async (
+  id: number,
+  command: string,
+  program?: number
+) => {
+  try {
+    const res = await fetch("/api/machine-command", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -130,11 +165,23 @@ useEffect(() => {
       body: JSON.stringify({
         machineId: id,
         command,
+        ...(program !== undefined ? { programId: program } : {}),
       }),
     });
 
-    fetchMachines();
-  };
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      alert(data.error || "ไม่สามารถส่งคำสั่งได้");
+      return;
+    }
+
+    await fetchMachines();
+  } catch (error) {
+    console.error("Machine command error:", error);
+    alert("เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ");
+  }
+};
 if (authChecking) {
   return <p className="p-4">🔐 กำลังตรวจสอบสิทธิ์...</p>;
 }
@@ -244,25 +291,71 @@ if (!authorized) return null;
                   </p>
                 )}
 
-                <div className="flex gap-2 mt-2">
-                  {m.status === "running" && (
-                    <button
-                      onClick={() => sendCommand(m.id, "pause")}
-                      className="bg-gray-700 text-white px-3 py-1 rounded w-full md:w-auto"
-                    >
-                      หยุด
-                    </button>
-                  )}
+                {/* ADMIN TEST CONTROLS */}
+<div className="mt-4 space-y-3 border-t pt-3">
 
-                  {m.status === "paused" && (
-                    <button
-                      onClick={() => sendCommand(m.id, "resume")}
-                      className="bg-blue-600 text-white px-3 py-1 rounded w-full md:w-auto"
-                    >
-                      เริ่ม
-                    </button>
-                  )}
-                </div>
+  <div className="text-sm font-semibold text-gray-700">
+    ADMIN TEST MODE
+  </div>
+
+  <div className="text-sm">
+    สถานะฝาเครื่อง:{" "}
+    {m.lidClosed ? (
+      <span className="text-green-600 font-semibold">
+        ปิดฝาแล้ว
+      </span>
+    ) : (
+      <span className="text-red-600 font-semibold">
+        เปิดฝาอยู่
+      </span>
+    )}
+  </div>
+
+  {/* POWER */}
+  <button
+    type="button"
+    onClick={() => sendCommand(m.id, "power")}
+    className="bg-gray-800 text-white px-4 py-2 rounded-lg w-full"
+  >
+    POWER
+  </button>
+
+  {/* START: RUNNING = PAUSE, PAUSED = RESUME */}
+  <button
+    type="button"
+    disabled={m.status === "available"}
+    onClick={() =>
+      sendCommand(
+        m.id,
+        m.status === "running" ? "pause" : "resume"
+      )
+    }
+    className="bg-blue-600 text-white px-4 py-2 rounded-lg w-full disabled:bg-gray-300 disabled:text-gray-500"
+  >
+    START
+  </button>
+
+  {/* PROGRAM BUTTONS */}
+  <div>
+    <p className="block text-sm mb-2 font-medium">
+      โปรแกรมทดสอบ
+    </p>
+
+    <div className="grid grid-cols-2 gap-2">
+      {getAdminPrograms(m).map((program) => (
+        <button
+          key={program.id}
+          type="button"
+          disabled={m.status !== "available" || !m.lidClosed}
+          onClick={() => sendCommand(m.id, "start", program.id)}
+          className="bg-green-600 text-white px-3 py-2 rounded-lg text-sm disabled:bg-gray-300 disabled:text-gray-500"
+        >
+          {program.id}. {program.name}
+        </button>
+      ))}
+    </div>
+  </div>
+</div>
               </div>
             ))}
           </div>

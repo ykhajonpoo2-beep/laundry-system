@@ -504,7 +504,9 @@ useEffect(() => {
             ❗นำผ้าเข้าเครื่อง เติมน้ำยาซัก แล้วปิดฝาเครื่อง
           </p>
         )}
-{status === "available" && waitingPayment && (
+{status === "available" &&
+  machine.lidClosed === true &&
+  waitingPayment && (
   <div className="border border-yellow-300 bg-yellow-50 rounded-xl p-4 mb-4">
     <p className="text-center font-bold text-yellow-800 text-lg">
       🟡 รอชำระเงิน
@@ -522,7 +524,7 @@ useEffect(() => {
           `/machine/${id}/payment?program=${pendingProgramId}`
         );
       }}
-      disabled={!pendingProgramId}
+      disabled={!pendingProgramId || machine.lidClosed !== true}
       className="w-full bg-yellow-500 text-white font-semibold py-3 rounded-xl mt-3 disabled:opacity-50"
     >
       กลับไปชำระเงิน
@@ -530,8 +532,8 @@ useEffect(() => {
   </div>
 )}
         {status === "available" &&
-          machine.lidClosed &&
-          !waitingPayment && (
+  machine.lidClosed === true &&
+  !waitingPayment && (
             <div className="space-y-3">
               {programs.map((program) => (
                 <button

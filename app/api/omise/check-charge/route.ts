@@ -1,7 +1,7 @@
-
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { getMachines, saveMachines } from "@/lib/machineDB";
+import { getMachineProgram } from "@/lib/programConfig";
 
 const omise = require("omise")({
   secretKey: process.env.OMISE_SECRET_KEY,
@@ -45,34 +45,31 @@ export async function POST(req: Request) {
       });
     }
 
+    // ตรวจสอบสถานะการชำระเงินกับ Omise โดยตรง
+    const charge = await omise.charges.retrieve(chargeId);
 
-    // ตรวจสอบกับ Omise โดยตรง
-const charge = await omise.charges.retrieve(chargeId);
+    if (charge.status !== "successful") {
+      if (
+        session.cancelled === true ||
+        session.status === "cancelled"
+      ) {
+        return NextResponse.json({
+          success: true,
+          paid: false,
+          started: false,
+          status: "cancelled",
+        });
+      }
 
-// ถ้ายังไม่ชำระเงิน ให้ตรวจว่ารายการถูกยกเลิกหรือหมดอายุหรือไม่
-if (charge.status !== "successful") {
-  if (
-    session.cancelled === true ||
-    session.status === "cancelled"
-  ) {
-    return NextResponse.json({
-      success: true,
-      paid: false,
-      started: false,
-      status: "cancelled",
-    });
-  }
+      return NextResponse.json({
+        success: true,
+        paid: false,
+        started: false,
+        status: charge.status,
+      });
+    }
 
-  return NextResponse.json({
-    success: true,
-    paid: false,
-    started: false,
-    status: charge.status,
-  });
-}
-
-
-    // ยอดเงินและสกุลเงินต้องตรงกับรายการในฐานข้อมูล
+    // ตรวจสอบยอดเงินและสกุลเงิน
     const expectedAmount = Number(session.amount) * 100;
     const actualCurrency = String(charge.currency || "").toLowerCase();
 
@@ -86,20 +83,21 @@ if (charge.status !== "successful") {
           success: false,
           paid: true,
           started: false,
-          error: "ยอดเงินหรือสกุลเงินไม่ตรงกับรายการ กรุณาตรวจสอบด้วยตนเอง",
+          error:
+            "ยอดเงินหรือสกุลเงินไม่ตรงกับรายการ กรุณาตรวจสอบด้วยตนเอง",
         },
         { status: 409 }
       );
     }
 
-    // หากหมดอายุแล้วแต่ Omise แจ้งว่าจ่ายสำเร็จ
-    // เก็บสถานะการจ่ายเงินไว้ แต่ไม่เริ่มเครื่องอัตโนมัติ
-   if (
-  session.cancelled === true ||
-  session.status === "cancelled" ||
-  (session.expiresAt &&
-    new Date(session.expiresAt).getTime() < Date.now())
-) {
+    // หากยกเลิกหรือหมดอายุแล้ว แต่ Omise แจ้งว่าชำระสำเร็จ
+    // จะไม่เริ่มเครื่องอัตโนมัติ
+    if (
+      session.cancelled === true ||
+      session.status === "cancelled" ||
+      (session.expiresAt &&
+        new Date(session.expiresAt).getTime() < Date.now())
+    ) {
       await sessions.updateOne(
         { _id: session._id },
         {
@@ -107,10 +105,11 @@ if (charge.status !== "successful") {
             status: "paid",
             paidAt: session.paidAt || new Date(),
             manualReview: true,
-            manualReviewReason: session.cancelled === true ||
-            session.status === "cancelled"
-            ? "ชำระสำเร็จหลังยกเลิกรายการ"
-            : "ชำระสำเร็จหลังรายการหมดอายุ",
+            manualReviewReason:
+              session.cancelled === true ||
+              session.status === "cancelled"
+                ? "ชำระสำเร็จหลังยกเลิกรายการ"
+                : "ชำระสำเร็จหลังรายการหมดอายุ",
           },
         }
       );
@@ -121,25 +120,26 @@ if (charge.status !== "successful") {
         started: false,
         manualReview: true,
         status: "successful",
-        message: "ชำระเงินสำเร็จ แต่ต้องตรวจสอบรายการก่อนเริ่มเครื่อง",
+        message:
+          "ชำระเงินสำเร็จ แต่ต้องตรวจสอบรายการก่อนเริ่มเครื่อง",
       });
     }
 
-    // ล็อกการเริ่มเครื่อง ป้องกันการประมวลผลซ้ำจากการ polling
+    // ล็อกการเริ่มเครื่อง ป้องกันการประมวลผลซ้ำจาก polling
     const now = new Date();
     const lockUntil = new Date(Date.now() + 30_000);
 
-   const claim = await sessions.findOneAndUpdate(
-  {
-    _id: session._id,
-    startedAt: null,
-    cancelled: { $ne: true },
-    status: { $ne: "cancelled" },
-    $or: [
-      { startLockUntil: { $exists: false } },
-      { startLockUntil: { $lt: now } },
-    ],
-  },
+    const claim = await sessions.findOneAndUpdate(
+      {
+        _id: session._id,
+        startedAt: null,
+        cancelled: { $ne: true },
+        status: { $ne: "cancelled" },
+        $or: [
+          { startLockUntil: { $exists: false } },
+          { startLockUntil: { $lt: now } },
+        ],
+      },
       {
         $set: {
           status: "paid",
@@ -179,6 +179,7 @@ if (charge.status !== "successful") {
 
     try {
       const machines = await getMachines();
+
       const machine = machines.find(
         (item: any) => Number(item.id) === machineId
       );
@@ -187,7 +188,7 @@ if (charge.status !== "successful") {
         throw new Error("ไม่พบเครื่องที่ผูกกับรายการชำระเงิน");
       }
 
-      // หาก Redis บันทึกรอบเดียวกันไปแล้ว ให้ถือว่าสั่งเริ่มแล้ว
+      // หาก Redis บันทึกรอบเดียวกันไปแล้ว ให้ถือว่าเริ่มเครื่องแล้ว
       if (machine.cycleId === cycleId) {
         await sessions.updateOne(
           { _id: session._id },
@@ -195,6 +196,7 @@ if (charge.status !== "successful") {
             $set: {
               status: "started",
               startedAt: new Date(),
+              cycleId,
             },
             $unset: { startLockUntil: "" },
           }
@@ -209,33 +211,65 @@ if (charge.status !== "successful") {
         });
       }
 
+      // ตรวจสอบประเภทและขนาดเครื่อง
       if (
-        machine.machineType !== "washer" ||
-        Number(machine.capacityKg) !== 9
+        machine.machineType !== "washer" &&
+        machine.machineType !== "dryer"
       ) {
-        throw new Error("รายการนี้ไม่ใช่เครื่องซักผ้า 9 กก. ที่รองรับ");
+        throw new Error("ประเภทเครื่องไม่ถูกต้อง");
       }
 
+      const capacityKg = Number(machine.capacityKg);
+
+      // ตรวจสอบข้อมูลเครื่องใน Payment Session ถ้ามีข้อมูลบันทึกไว้
+      if (
+        session.machineType !== undefined &&
+        session.machineType !== machine.machineType
+      ) {
+        throw new Error("ประเภทเครื่องไม่ตรงกับรายการชำระเงิน");
+      }
+
+      if (
+        session.capacityKg !== undefined &&
+        Number(session.capacityKg) !== capacityKg
+      ) {
+        throw new Error("ขนาดเครื่องไม่ตรงกับรายการชำระเงิน");
+      }
+
+      // อ่านโปรแกรมจาก config กลาง
+      const selectedProgram = getMachineProgram(
+        machine.machineType,
+        capacityKg,
+        programId
+      );
+
+      if (!selectedProgram) {
+        throw new Error("ไม่พบโปรแกรมที่รองรับสำหรับเครื่องนี้");
+      }
+
+      // ตรวจสอบราคาอีกครั้งกับ config กลาง
+      if (
+        !Number.isFinite(Number(session.amount)) ||
+        Number(session.amount) !== selectedProgram.price
+      ) {
+        throw new Error("ราคาโปรแกรมไม่ตรงกับรายการชำระเงิน");
+      }
+
+      // ตรวจสอบสถานะเครื่อง
       if (machine.status !== "available") {
         throw new Error("เครื่องไม่พร้อมทำงานหลังชำระเงิน");
       }
 
-      if (machine.lidClosed !== true) {
-        throw new Error("ฝาเครื่องยังไม่ปิด");
-      }
+     // ตรวจสอบฝาทุกประเภทเครื่อง ทั้งเครื่องซักและเครื่องอบ
+if (machine.lidClosed !== true) {
+  throw new Error("ฝาเครื่องยังไม่ปิด");
+}
 
-      const durations: Record<number, number> = {
-        1: 17 * 60,
-        2: 19 * 60,
-        3: 60 * 60,
-        4: 70 * 60,
-        5: 90 * 60,
-      };
+      // ใช้ระยะเวลาจาก config กลาง
+      const duration = selectedProgram.durationSeconds;
 
-      const duration = durations[programId];
-
-      if (!duration) {
-        throw new Error("ไม่พบโปรแกรมที่ผูกกับรายการชำระเงิน");
+      if (!Number.isFinite(duration) || duration <= 0) {
+        throw new Error("ระยะเวลาโปรแกรมไม่ถูกต้อง");
       }
 
       const updatedMachines = machines.map((item: any) => {
@@ -255,6 +289,7 @@ if (charge.status !== "successful") {
 
       await saveMachines(updatedMachines);
 
+      // บันทึกสถานะเริ่มเครื่องสำเร็จ
       await sessions.updateOne(
         { _id: session._id },
         {
@@ -278,12 +313,15 @@ if (charge.status !== "successful") {
         started: true,
         status: "successful",
         machineId,
+        machineType: machine.machineType,
+        capacityKg,
         programId,
+        programName: selectedProgram.name,
         duration,
         cycleId,
       });
     } catch (machineError) {
-      // ไม่ลบข้อมูลการจ่ายเงิน หากเครื่องยังเริ่มไม่ได้
+      // ไม่ลบข้อมูลการชำระเงิน หากเครื่องยังเริ่มไม่ได้
       await sessions.updateOne(
         { _id: session._id },
         {

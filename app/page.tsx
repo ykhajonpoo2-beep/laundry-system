@@ -105,13 +105,22 @@ const getSizeLabel = (m: Machine) => {
   </div>
 
   {isAdmin && (
-    <button
-      type="button"
-      onClick={handleAdminLogout}
-      className="text-sm text-red-600 font-semibold"
-    >
-      Logout
-    </button>
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={() => router.push("/admin")}
+        className="text-sm text-blue-700 font-semibold"
+      >
+        ← Admin Dashboard
+      </button>
+      <button
+        type="button"
+        onClick={handleAdminLogout}
+        className="text-sm text-red-600 font-semibold"
+      >
+        Logout
+      </button>
+    </div>
   )}
 </div>
 

@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   useParams,
   useRouter,
   useSearchParams,
 } from "next/navigation";
-import { useRef } from "react";
 
 const programs: Record<string, {
   name: string;
@@ -52,6 +51,9 @@ export default function PaymentPage() {
   const [timeLeft, setTimeLeft] = useState(60);
 const [paid, setPaid] = useState(false);
 const [lidClosed, setLidClosed] = useState(false);
+const [machineType, setMachineType] = useState("");
+const [capacityKg, setCapacityKg] = useState(0);
+const [machineStatusLoaded, setMachineStatusLoaded] = useState(false);
 const [qrCodeUrl, setQrCodeUrl] =
   useState<string | null>(null);
 
@@ -60,13 +62,21 @@ const [chargeId, setChargeId] =
   const [uiExpireAt, setUiExpireAt] =
   useState<number>(0);
 const [phone, setPhone] = useState("");
+const redemptionIdRef = useRef<string | null>(null);
 const [canRedeem, setCanRedeem] = useState(false);
 const [waitingPayment, setWaitingPayment] = useState(true);
 const [paymentMessage, setPaymentMessage] = useState("");
 const [manualReview, setManualReview] = useState(false);
 // ✅ เพิ่มตรงนี้
 const [showPhonePopup, setShowPhonePopup] = useState(false);
-  const isProgram1 = programId === "1";
+const isProgram1 = programId === "1";
+
+const machineLoaded =
+  machineStatusLoaded &&
+  (machineType === "washer" || machineType === "dryer");
+
+const requiresLidClosed = machineLoaded;
+const canShowQR = machineLoaded && lidClosed;
   // ----------------------
   // TIMER
   // ----------------------
@@ -88,26 +98,70 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   // CHECK LID
   // ----------------------
   
-  useEffect(() => {
-    const fetchStatus = async () => {
+
+useEffect(() => {
+  let mounted = true;
+
+  // เริ่มต้นให้ถือว่ายังตรวจสอบเครื่องไม่เสร็จ
+  setMachineStatusLoaded(false);
+  setLidClosed(false);
+  setMachineType("");
+  setCapacityKg(0);
+
+  const fetchStatus = async () => {
+    try {
       const res = await fetch("/api/machines", {
         cache: "no-store",
       });
 
+      if (!res.ok) {
+        throw new Error("ไม่สามารถตรวจสอบสถานะเครื่องได้");
+      }
+
       const machines = await res.json();
 
       const m = machines.find(
-        (m: any) => Number(m.id) === Number(id)
+        (item: any) => Number(item.id) === Number(id)
       );
 
-      setLidClosed(m?.lidClosed);
-    };
+      if (!mounted) return;
 
-    fetchStatus();
-    const interval = setInterval(fetchStatus, 1000);
+      if (
+        !m ||
+        (m.machineType !== "washer" &&
+          m.machineType !== "dryer")
+      ) {
+        setMachineStatusLoaded(false);
+        setLidClosed(false);
+        setMachineType("");
+        setCapacityKg(0);
+        return;
+      }
 
-    return () => clearInterval(interval);
-  }, [id]);
+      setMachineType(m.machineType);
+      setCapacityKg(Number(m.capacityKg ?? 0));
+      setLidClosed(m.lidClosed === true);
+      setMachineStatusLoaded(true);
+
+    } catch (error) {
+      console.error("Fetch machine status error:", error);
+
+      if (mounted) {
+        setMachineStatusLoaded(false);
+        setLidClosed(false);
+      }
+    }
+  };
+
+  void fetchStatus();
+
+  const interval = setInterval(fetchStatus, 1000);
+
+  return () => {
+    mounted = false;
+    clearInterval(interval);
+  };
+}, [id]);
 
   // ----------------------
   // CHECK POINTS
@@ -129,33 +183,50 @@ const [showPhonePopup, setShowPhonePopup] = useState(false);
   // ----------------------
   // REDEEM
   // ----------------------
-  const redeem = async () => {
-    try {
-      await fetch("/api/points", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone,
-          program: 1,
-        }),
-      });
 
- await fetch("/api/start-machine", {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    machineId: Number(id),
-    price: 0,
-    isFree: true, // ✅ เพิ่มตรงนี้
-  }),
-});
-
-      alert("ใช้ฟรีสำเร็จ 🎉");
-      router.push(`/machine/${id}`);
-    } catch {
-      alert("ใช้สิทธิไม่สำเร็จ");
+const redeem = async () => {
+  try {
+    if (!/^\d{10}$/.test(phone)) {
+      alert("กรุณากรอกเบอร์โทรศัพท์ 10 หลัก");
+      return;
     }
-  };
+
+    if (!redemptionIdRef.current) {
+      redemptionIdRef.current = crypto.randomUUID();
+    }
+
+    const res = await fetch("/api/redeem", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phone,
+        machineId: Number(id),
+        programId: 1,
+        redemptionId: redemptionIdRef.current,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.success) {
+      throw new Error(
+        data.error || "ไม่สามารถใช้สิทธิซักฟรีได้"
+      );
+    }
+
+    alert("ใช้สิทธิซักฟรีสำเร็จ 🎉");
+    router.push(`/machine/${id}`);
+  } catch (error) {
+    alert(
+      error instanceof Error
+        ? error.message
+        : "ใช้สิทธิไม่สำเร็จ กรุณาลองอีกครั้ง"
+    );
+  }
+};
+
 
   const submitPhone = async () => {
   if (phone) {
@@ -201,30 +272,41 @@ useEffect(() => {
 
 
 useEffect(() => {
+  // ต้องตรวจสอบเครื่องเสร็จและฝาปิดสนิทก่อน
+  if (!machineLoaded || !lidClosed) return;
+
+  let cancelled = false;
 
   const loadSession = async () => {
-
     try {
-
+      // ค้นหารายการ QR เดิมก่อน
       const res = await fetch(
         `/api/payment-session?machineId=${id}&programId=${programId}`
       );
 
       const data = await res.json();
 
-      if (data.found) {
+      if (cancelled) return;
 
+      if (data.found) {
         setQrCodeUrl(data.qrCodeUrl);
         setChargeId(data.chargeId);
+
         const expireAt = new Date(data.uiExpireAt).getTime();
 
-setUiExpireAt(expireAt);
-setTimeLeft(
-  Math.max(0, Math.floor((expireAt - Date.now()) / 1000))
-);
+        setUiExpireAt(expireAt);
+        setTimeLeft(
+          Math.max(
+            0,
+            Math.floor((expireAt - Date.now()) / 1000)
+          )
+        );
 
         return;
       }
+
+      // ตรวจสอบอีกครั้งก่อนสร้าง QR
+      if (cancelled) return;
 
       const createRes = await fetch(
         "/api/omise/create-charge",
@@ -234,37 +316,49 @@ setTimeLeft(
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-          machineId: Number(id),
-          programId: Number(programId),
-        }),
-
+            machineId: Number(id),
+            programId: Number(programId),
+          }),
         }
       );
 
       const charge = await createRes.json();
 
-      if (!charge.success) throw new Error();
+      if (cancelled) return;
+
+      if (!createRes.ok || !charge.success) {
+        throw new Error(
+          charge.error || "ไม่สามารถสร้าง QR ได้"
+        );
+      }
 
       setQrCodeUrl(charge.qrCodeUrl);
       setChargeId(charge.chargeId);
+
       const expireAt = Number(charge.uiExpireAt);
 
-setUiExpireAt(expireAt);
-setTimeLeft(
-  Math.max(0, Math.floor((expireAt - Date.now()) / 1000))
-);
+      setUiExpireAt(expireAt);
+      setTimeLeft(
+        Math.max(
+          0,
+          Math.floor((expireAt - Date.now()) / 1000)
+        )
+      );
 
-    } catch (err) {
-
-      console.error(err);
-
+    } catch (error) {
+      if (!cancelled) {
+        console.error("Load payment session error:", error);
+      }
     }
-
   };
 
-  loadSession();
+  void loadSession();
 
-}, [id, programId]);  // ✅ จบตรงนี้
+  return () => {
+    cancelled = true;
+  };
+
+}, [id, programId, machineLoaded, lidClosed]);
 useEffect(() => {
 
   if (!uiExpireAt) return;
@@ -413,7 +507,7 @@ if (!program) {
   ← ย้อนกลับ
 </button>
 
-        {!lidClosed && (
+        {requiresLidClosed && !lidClosed && (
           <p className="text-red-500 mb-2 font-bold">
             ❗ กรุณาปิดฝาเครื่อง
           </p>
@@ -421,64 +515,80 @@ if (!program) {
 
         <h1>เครื่อง #{id}</h1>
 
-        <p className="mb-2">โปรแกรม: {program.name}</p>
-        <p className="mb-4 text-gray-500">
-          ราคา {program.price} บาท
-        </p>
-
-        {/* QR */}
-        {lidClosed ? (
- <div
-  id="qr-area"
-  className="border-2 border-dashed h-60 flex items-center justify-center mb-4"
->
-  {qrCodeUrl ? (
-    <img
-      src={qrCodeUrl}
-      alt="PromptPay QR"
-      className="w-full max-w-xs"
-    />
-  ) : (
-    <p>กำลังสร้าง QR...</p>
-  )}
-</div>
-        ) : (
-          <div className="border-2 h-60 flex items-center justify-center mb-4 bg-gray-100">
-            ❌ QR ไม่แสดง
-          </div>
-        )}
-
-<button
-  onClick={saveQR}
-  className="w-full bg-blue-500 text-white py-2 rounded mb-3"
->
-  💾 บันทึก QR
-</button>
-<p className="text-xs text-gray-500 text-center mb-2">
-  📥 กดบันทึก QR เพื่อใช้ชำระภายหลัง
-</p>
-        {/* REDEEM */}
-{isProgram1 && canRedeem && (
-  <button
-    onClick={redeem}
-    className="w-full bg-green-500 text-white py-3 rounded-xl mb-3"
-  >
-    🎁 ใช้สิทธิซักฟรี
-  </button>
-)}
-        <p className="text-center mb-4">
-          ชำระภายใน {timeLeft} วินาที
-        </p>
-{waitingPayment && !paid && !manualReview && (
-  <p className="text-yellow-500 text-center">
-    ⏳ รอการชำระเงิน...
+        {!machineLoaded && (
+  <p className="text-center text-gray-500 mb-4">
+    กำลังตรวจสอบสถานะเครื่อง...
   </p>
 )}
 
-{paymentMessage && (
-  <p className="mt-3 text-center text-sm text-amber-700">
-    {paymentMessage}
-  </p>
+{canShowQR && (
+  <>
+    <p className="mb-2">
+      โปรแกรม: {program.name}
+    </p>
+
+    <p className="mb-4 text-gray-500">
+      ราคา {program.price} บาท
+    </p>
+
+    <div
+      id="qr-area"
+      className="border-2 border-dashed h-60 flex items-center justify-center mb-4"
+    >
+      {qrCodeUrl ? (
+        <img
+          src={qrCodeUrl}
+          alt="PromptPay QR"
+          className="w-full max-w-xs"
+        />
+      ) : (
+        <p>กำลังสร้าง QR...</p>
+      )}
+    </div>
+
+    {qrCodeUrl && (
+      <>
+        <button
+          onClick={saveQR}
+          className="w-full bg-blue-500 text-white py-2 rounded mb-3"
+        >
+          💾 บันทึก QR
+        </button>
+
+        <p className="text-xs text-gray-500 text-center mb-2">
+          📥 กดบันทึก QR เพื่อใช้ชำระภายหลัง
+        </p>
+      </>
+    )}
+
+    {machineType === "washer" &&
+      capacityKg === 9 &&
+      isProgram1 &&
+      canRedeem && (
+        <button
+          onClick={redeem}
+          className="w-full bg-green-500 text-white py-3 rounded-xl mb-3"
+        >
+          🎁 ใช้สิทธิซักฟรี
+        </button>
+      )}
+
+    <p className="text-center mb-4">
+      ชำระภายใน {timeLeft} วินาที
+    </p>
+
+    {waitingPayment && !paid && !manualReview && (
+      <p className="text-yellow-500 text-center">
+        ⏳ รอการชำระเงิน...
+      </p>
+    )}
+
+    {paymentMessage && (
+      <p className="mt-3 text-center text-sm text-amber-700">
+        {paymentMessage}
+      </p>
+    )}
+  </>
 )}
 
       </div>
