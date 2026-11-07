@@ -89,9 +89,11 @@ const esp32LastSeen = await getEsp32LastSeen(
   machines.map((m: any) => m.id)
 );
 
+const heartbeatNow = Date.now();
+
 const responseMachines = machines.map((m: any) => {
   const lastSeenAt = esp32LastSeen[m.id] ?? null;
-  const elapsed = lastSeenAt === null ? null : now - lastSeenAt;
+  const elapsed = lastSeenAt === null ? null : heartbeatNow - lastSeenAt;
 
   return {
     ...m,
