@@ -1,7 +1,7 @@
-﻿import { NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { randomUUID } from "node:crypto";
-import { getMachines, saveMachines } from "@/lib/machineDB";
+import { getMachines, saveMachines, markEsp32Seen } from "@/lib/machineDB";
 import { verifyAdminSession, COOKIE_NAME } from "@/lib/adminAuth";
 
 function maxProgramForMachine(id: number) {
@@ -43,6 +43,8 @@ export async function GET(req: Request) {
         { status: 404 }
       );
     }
+
+    await markEsp32Seen(id);
 
     return NextResponse.json({
       command: machine.command || "none",

@@ -248,3 +248,39 @@ export async function saveMachines(
 
   await redis.set("machines", JSON.stringify(machines));
 }
+
+// ----------------------
+// ESP32 HEARTBEAT
+// ----------------------
+export async function markEsp32Seen(
+  machineId: number
+): Promise<void> {
+  await ensureRedisConnected();
+
+  await redis.set(
+    `esp32:lastSeen:${machineId}`,
+    String(Date.now())
+  );
+}
+
+export async function getEsp32LastSeen(
+  machineIds: number[]
+): Promise<Record<number, number | null>> {
+  await ensureRedisConnected();
+
+  const entries = await Promise.all(
+    machineIds.map(async (id) => {
+      const value = await redis.get(`esp32:lastSeen:${id}`);
+      const timestamp = value === null ? null : Number(value);
+
+      return [
+        id,
+        timestamp !== null && Number.isFinite(timestamp)
+          ? timestamp
+          : null,
+      ] as const;
+    })
+  );
+
+  return Object.fromEntries(entries);
+}

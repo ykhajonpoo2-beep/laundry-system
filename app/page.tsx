@@ -15,6 +15,8 @@ type Machine = {
   waitingPayment?: boolean;
   paymentRemain?: number;
   paymentProgram?: number;
+  esp32Online?: boolean;
+  esp32LastSeenAt?: number | null;
 };
 
 
@@ -172,6 +174,17 @@ onClick={() => {
   เครื่อง{washer ? "ซักผ้า" : "อบผ้า"} No.
   {String(m.id).padStart(2, "0")}
 </div>
+
+ <div className="mt-1 flex items-center justify-center gap-1.5 text-[11px]">
+   <span
+     className={`h-2 w-2 rounded-full ${
+       m.esp32Online ? "bg-green-500" : "bg-red-500"
+     }`}
+   />
+   <span className={m.esp32Online ? "text-green-700" : "text-red-600"}>
+     {m.esp32Online ? "ONLINE" : "OFFLINE"}
+   </span>
+ </div>
 
 <div className="text-sm font-medium text-gray-500">
   {getSizeLabel(m)}

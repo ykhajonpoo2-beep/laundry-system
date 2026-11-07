@@ -1,6 +1,6 @@
 import clientPromise from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { getMachines, saveMachines } from "@/lib/machineDB";
+import { getMachines, saveMachines, getEsp32LastSeen } from "@/lib/machineDB";
 
 export async function GET() {
   try {
@@ -85,7 +85,22 @@ for (const s of sessions) {
   }
 }
 
-return NextResponse.json(machines);
+const esp32LastSeen = await getEsp32LastSeen(
+  machines.map((m: any) => m.id)
+);
+
+const responseMachines = machines.map((m: any) => {
+  const lastSeenAt = esp32LastSeen[m.id] ?? null;
+  const elapsed = lastSeenAt === null ? null : now - lastSeenAt;
+
+  return {
+    ...m,
+    esp32LastSeenAt: lastSeenAt,
+    esp32Online: elapsed !== null && elapsed >= 0 && elapsed < 15000,
+  };
+});
+
+return NextResponse.json(responseMachines);
 
   } catch (err) {
     console.error("machines API error", err);
