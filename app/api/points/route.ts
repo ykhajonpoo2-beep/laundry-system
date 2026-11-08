@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
+import { getMachines } from "@/lib/machineDB";
 
 const MAX_POINTS = 5;
 
@@ -59,6 +60,44 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: "ข้อมูลเครื่องหรือรอบซักไม่ถูกต้อง" },
         { status: 400 }
+      );
+    }
+
+    // ตรวจสอบรอบซักกับข้อมูลเครื่องจริงก่อนให้แต้ม
+    const machines = await getMachines();
+    const currentMachine = machines.find(
+      (item) => Number(item.id) === id
+    );
+
+    if (
+      !currentMachine ||
+      currentMachine.status !== "running" ||
+      String(currentMachine.cycleId ?? "") !== cycle
+    ) {
+      return NextResponse.json(
+        { error: "ไม่พบรอบซักที่กำลังทำงาน หรือรอบซักไม่ตรงกัน" },
+        { status: 409 }
+      );
+    }
+
+    const capacityKg = Number(currentMachine.capacityKg);
+    const programId = Number(currentMachine.program);
+
+    const earnsPoint =
+      currentMachine.machineType === "washer" &&
+      currentMachine.isFree !== true &&
+      (
+        (capacityKg === 9 && [3, 4, 5].includes(programId)) ||
+        (
+          (capacityKg === 15 || capacityKg === 25) &&
+          [1, 2, 3, 4, 5].includes(programId)
+        )
+      );
+
+    if (!earnsPoint) {
+      return NextResponse.json(
+        { error: "เครื่องหรือโปรแกรมนี้ไม่ได้รับคะแนนสะสม" },
+        { status: 403 }
       );
     }
 

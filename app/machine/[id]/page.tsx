@@ -26,25 +26,25 @@ const ownerWasher9Programs = [
   },
 ];
 const washer15Programs = [
-  { id: 1, name: "ซักด่วน น้ำอุ่น", duration: "40 นาที", price: 40 },
-  { id: 2, name: "ซักทั่วไป น้ำเย็น", duration: "60 นาที", price: 50 },
-  { id: 3, name: "ซักทั่วไป น้ำอุ่น", duration: "70 นาที", price: 60 },
-  { id: 4, name: "ซักทั่วไป น้ำร้อน", duration: "80 นาที", price: 70 },
-  { id: 5, name: "ซักผ้านวม", duration: "80 นาที", price: 80 },
+  { id: 1, name: "ซักด่วน น้ำอุ่น", duration: "40 นาที", price: 50 },
+  { id: 2, name: "ซักทั่วไป น้ำเย็น", duration: "60 นาที", price: 60 },
+  { id: 3, name: "ซักทั่วไป น้ำอุ่น", duration: "70 นาที", price: 70 },
+  { id: 4, name: "ซักทั่วไป น้ำร้อน", duration: "80 นาที", price: 80 },
+  { id: 5, name: "ซักผ้านวม", duration: "80 นาที", price: 90 },
 ];
 
 const washer25Programs = [
-  { id: 1, name: "ซักด่วน น้ำอุ่น", duration: "40 นาที", price: 60 },
-  { id: 2, name: "ซักทั่วไป น้ำเย็น", duration: "60 นาที", price: 70 },
-  { id: 3, name: "ซักทั่วไป น้ำอุ่น", duration: "70 นาที", price: 80 },
-  { id: 4, name: "ซักทั่วไป น้ำร้อน", duration: "80 นาที", price: 90 },
-  { id: 5, name: "ซักผ้านวม", duration: "80 นาที", price: 100 },
+  { id: 1, name: "ซักด่วน น้ำอุ่น", duration: "40 นาที", price: 70 },
+  { id: 2, name: "ซักทั่วไป น้ำเย็น", duration: "60 นาที", price: 80 },
+  { id: 3, name: "ซักทั่วไป น้ำอุ่น", duration: "70 นาที", price: 90 },
+  { id: 4, name: "ซักทั่วไป น้ำร้อน", duration: "80 นาที", price: 100 },
+  { id: 5, name: "ซักผ้านวม", duration: "80 นาที", price: 110 },
 ];
 
 const dryer9Programs = [
   { id: 1, name: "อบด่วน", duration: "30 นาที", price: 30 },
   { id: 2, name: "อบแห้ง", duration: "80 นาที", price: 50 },
-  { id: 3, name: "อบผ้านวม", duration: "90 นาที", price: 60 },
+  { id: 3, name: "อบผ้านวม", duration: "90 นาที", price: 90 },
 ];
 
 export default function MachinePage() {
@@ -384,8 +384,19 @@ useEffect(() => {
         machine.status !== "running" ||
         machine.isFree ||
         !machine.cycleId ||
-        machine.program <= 0 ||
-        machine.machineType !== "washer" ||
+        !(
+          machine.machineType === "washer" &&
+          (
+            (
+              Number(machine.capacityKg) === 9 &&
+              [3, 4, 5].includes(Number(machine.program))
+            ) ||
+            (
+              [15, 25].includes(Number(machine.capacityKg)) &&
+              [1, 2, 3, 4, 5].includes(Number(machine.program))
+            )
+          )
+        ) ||
         showPhonePopup
       ) {
         return;

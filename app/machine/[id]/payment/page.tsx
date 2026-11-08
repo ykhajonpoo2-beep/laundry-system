@@ -1,43 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { getMachineProgram } from "@/lib/programConfig";
 import {
   useParams,
   useRouter,
   useSearchParams,
 } from "next/navigation";
 
-const programs: Record<string, {
-  name: string;
-  price: number;
-  duration: number;
-}> = {
-  "1": {
-    name: "ซักด่วน น้ำเย็น",
-    price: 20,
-    duration: 17 * 60,
-  },
-  "2": {
-    name: "ซักด่วน น้ำอุ่น",
-    price: 30,
-    duration: 19 * 60,
-  },
-  "3": {
-    name: "ซักทั่วไป น้ำเย็น",
-    price: 40,
-    duration: 60 * 60,
-  },
-  "4": {
-    name: "ซักทั่วไป น้ำอุ่น",
-    price: 50,
-    duration: 70 * 60,
-  },
-  "5": {
-    name: "ซักทั่วไป น้ำร้อน",
-    price: 60,
-    duration: 90 * 60,
-  },
-};
 
 
 export default function PaymentPage() {
@@ -46,7 +16,6 @@ export default function PaymentPage() {
   const searchParams = useSearchParams();
 
   const programId = searchParams.get("program") || "1";
-  const program = programs[programId];
 
   const [timeLeft, setTimeLeft] = useState(60);
 const [paid, setPaid] = useState(false);
@@ -74,6 +43,15 @@ const isProgram1 = programId === "1";
 const machineLoaded =
   machineStatusLoaded &&
   (machineType === "washer" || machineType === "dryer");
+
+const program =
+  machineType === "washer" || machineType === "dryer"
+    ? getMachineProgram(
+        machineType,
+        capacityKg,
+        Number(programId)
+      )
+    : undefined;
 
 const requiresLidClosed = machineLoaded;
 const canShowQR = machineLoaded && lidClosed;
@@ -451,7 +429,7 @@ useEffect(() => {
     clearInterval(interval);
   };
 }, [chargeId, paid, manualReview, id, router]);
-if (!program) {
+if (machineLoaded && !program) {
   return (
     <main className="min-h-screen p-4">
       <p className="text-red-600">

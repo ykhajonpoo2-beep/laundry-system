@@ -17,25 +17,25 @@ const washer9: ProgramConfig[] = [
 ];
 
 const washer15: ProgramConfig[] = [
-  { id: 1, name: "ซักด่วน น้ำอุ่น", price: 40, durationSeconds: 40 * 60 },
-  { id: 2, name: "ซักทั่วไป น้ำเย็น", price: 50, durationSeconds: 60 * 60 },
-  { id: 3, name: "ซักทั่วไป น้ำอุ่น", price: 60, durationSeconds: 70 * 60 },
-  { id: 4, name: "ซักทั่วไป น้ำร้อน", price: 70, durationSeconds: 80 * 60 },
-  { id: 5, name: "ซักผ้านวม", price: 80, durationSeconds: 80 * 60 },
+  { id: 1, name: "ซักด่วน น้ำอุ่น", price: 50, durationSeconds: 40 * 60 },
+  { id: 2, name: "ซักทั่วไป น้ำเย็น", price: 60, durationSeconds: 60 * 60 },
+  { id: 3, name: "ซักทั่วไป น้ำอุ่น", price: 70, durationSeconds: 70 * 60 },
+  { id: 4, name: "ซักทั่วไป น้ำร้อน", price: 80, durationSeconds: 80 * 60 },
+  { id: 5, name: "ซักผ้านวม", price: 90, durationSeconds: 80 * 60 },
 ];
 
 const washer25: ProgramConfig[] = [
-  { id: 1, name: "ซักด่วน น้ำอุ่น", price: 60, durationSeconds: 40 * 60 },
-  { id: 2, name: "ซักทั่วไป น้ำเย็น", price: 70, durationSeconds: 60 * 60 },
-  { id: 3, name: "ซักทั่วไป น้ำอุ่น", price: 80, durationSeconds: 70 * 60 },
-  { id: 4, name: "ซักทั่วไป น้ำร้อน", price: 90, durationSeconds: 80 * 60 },
-  { id: 5, name: "ซักผ้านวม", price: 100, durationSeconds: 80 * 60 },
+  { id: 1, name: "ซักด่วน น้ำอุ่น", price: 70, durationSeconds: 40 * 60 },
+  { id: 2, name: "ซักทั่วไป น้ำเย็น", price: 80, durationSeconds: 60 * 60 },
+  { id: 3, name: "ซักทั่วไป น้ำอุ่น", price: 90, durationSeconds: 70 * 60 },
+  { id: 4, name: "ซักทั่วไป น้ำร้อน", price: 100, durationSeconds: 80 * 60 },
+  { id: 5, name: "ซักผ้านวม", price: 110, durationSeconds: 80 * 60 },
 ];
 
 const dryer9: ProgramConfig[] = [
   { id: 1, name: "อบด่วน", price: 30, durationSeconds: 30 * 60 },
   { id: 2, name: "อบแห้ง", price: 50, durationSeconds: 80 * 60 },
-  { id: 3, name: "อบผ้านวม", price: 60, durationSeconds: 90 * 60 },
+  { id: 3, name: "อบผ้านวม", price: 90, durationSeconds: 90 * 60 },
 ];
 
 export function getMachinePrograms(
