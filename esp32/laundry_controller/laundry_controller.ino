@@ -6,12 +6,13 @@
 const char* serverUrl =
   "https://laundry-system-one.vercel.app";
 
-#define MACHINE_ID 3
+#define MACHINE_ID 5
 
 const int powerPin = 4;
 const int jogA = 5;
 const int jogB = 6;
 const int tempPin = 7;
+const int rinsePin = 8;
 const int revPin = 15;
 const int startPin = 16;
 const int machineDonePin = 17;
@@ -27,41 +28,50 @@ unsigned long remainingTime = 0;
 struct ProgramConfig {
   int durationSeconds;
   int jog;
+  int rinse;
   int temp;
   int rev;
 };
 
 // ค่าเริ่มต้น JOG / TEMP / REV ตามที่ยืนยัน
 const ProgramConfig washer9[] = {
-  {1020, 4,  0, 3},  // 1 ซักด่วน น้ำเย็น 17 นาที
-  {1140, 1,  2, 3},  // 2 ซักด่วน น้ำอุ่น 19 นาที
-  {3600, 12, 2, 0},  // 3 ซักทั่วไป น้ำเย็น 60 นาที
-  {4200, 4,  0, 3},  // 4 ซักทั่วไป น้ำอุ่น 70 นาที
-  {5400, 1,  2, 3},  // 5 ซักทั่วไป น้ำร้อน 90 นาที
-  {900,  12, 2, 0},  // 6 ล้าง ปั่นหมาด 15 นาที
-  {7200, 4,  0, 3}   // 7 ล้างเครื่อง 120 นาที
+  {1020, 4,  0, 0, 3},  // 1 ซักด่วน น้ำเย็น 17 นาที
+  {1140, 4,  0, 2, 3},  // 2 ซักด่วน น้ำอุ่น 22 นาที
+  {3600, 12, 0, 2, 0},  // 3 ซักทั่วไป น้ำเย็น 60 นาที
+  {4200, 12, 0, 0, 0},  // 4 ซักทั่วไป น้ำอุ่น 70 นาที
+  {4800, 12, 0, 1, 0},  // 5 ซักทั่วไป น้ำร้อน 80 นาที
+  {960,  7,  0, 0, 5},  // 6 ล้าง ปั่นหมาด 16 นาที
+  {4800, 6,  0, 0, 0}   // 7 ล้างเครื่อง 80 นาที
 };
 
-const ProgramConfig washer15[] = {
-  {2400, 4, 0, 3},
-  {3600, 1, 2, 3},
-  {4200, 12, 2, 0},
-  {4800, 4, 0, 3},
-  {4800, 1, 2, 3}
+const ProgramConfig washer15_id5[] = {
+  {2700, 5, 0, 0, 0},   // 1 ซักด่วน น้ำอุ่น 45 นาที
+  {3600, 1, 4, 2, 4},   // 2 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 1, 4, 0, 4},   // 3 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 1, 4, 1, 4},   // 4 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 4, 3, 0, 0}    // 5 ผ้านวม น้ำเย็น 60 นาที
+};
+
+const ProgramConfig washer15_id6[] = {
+  {2700, 5, 0, 0, 0},   // 1 ซักด่วน น้ำอุ่น 45 นาที
+  {3600, 1, 0, 0, 0},   // 2 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 1, 0, 1, 1},   // 3 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 1, 0, 2, 2},   // 4 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 4, 0, 0, 0}    // 5 ผ้านวม น้ำเย็น 60 นาที
 };
 
 const ProgramConfig washer25[] = {
-  {2400, 4, 0, 3},
-  {3600, 1, 2, 3},
-  {4200, 12, 2, 0},
-  {4800, 4, 0, 3},
-  {4800, 1, 2, 3}
+  {2700, 4, 0, 0, 3},    // 1 ซักด่วน น้ำอุ่น 45 นาที
+  {3600, 1, 0, 2, 3},    // 2 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 12, 0, 2, 0},   // 3 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 4, 0, 0, 3},    // 4 ซักทั่วไป น้ำเย็น 60 นาที
+  {3600, 1, 0, 2, 3}     // 5 ผ้านวม น้ำเย็น 60 นาที
 };
 
 const ProgramConfig dryer9[] = {
-  {1800, 3, 0, 0},
-  {4800, 1, 2, 3},
-  {5400, 12, 2, 0}
+  {1800, 2, 0, 0, 0},     // 1 อบด่วน 30 นาที
+  {5400, 1, 0, 0, 0},     // 2 อบทั่วไป 90 นาที
+  {10800, 14, 0, 0, 0}    // 3 อบผ้านวม 180 นาที
 };
 
 ProgramConfig getProgramConfig(int machineId, int programId) {
@@ -70,9 +80,12 @@ ProgramConfig getProgramConfig(int machineId, int programId) {
     return washer9[programId - 1];
   }
 
-  if (machineId >= 5 && machineId <= 6 &&
-      programId >= 1 && programId <= 5) {
-    return washer15[programId - 1];
+  if (machineId == 5 && programId >= 1 && programId <= 5) {
+    return washer15_id5[programId - 1];
+  }
+
+  if (machineId == 6 && programId >= 1 && programId <= 5) {
+    return washer15_id6[programId - 1];
   }
 
   if (machineId >= 7 && machineId <= 8 &&
@@ -85,7 +98,7 @@ ProgramConfig getProgramConfig(int machineId, int programId) {
     return dryer9[programId - 1];
   }
 
-  return {0, 0, 0, 0}; // โปรแกรมไม่ถูกต้อง
+  return {0, 0, 0, 0, 0}; // โปรแกรมไม่ถูกต้อง
 }
 void pulsePin(int pin, int ms = 300) {
   digitalWrite(pin, HIGH);
@@ -125,6 +138,7 @@ void pulsePin(int pin, int ms = 300) {
   }
 }void runWashSequence(
   int jogCount,
+  int rinseCount,
   int tempCount,
   int revCount
 ) {
@@ -135,6 +149,11 @@ void pulsePin(int pin, int ms = 300) {
 
   Serial.println("JOG");
   jogSequence(jogCount);
+
+  delay(1000);
+
+  Serial.println("RINSE");
+  pulseMultiple(rinsePin, rinseCount);
 
   delay(1000);
 
@@ -184,11 +203,11 @@ bool runProgramById(int programId) {
   );
 
   Serial.printf(
-    "DURATION=%d JOG=%d TEMP=%d REV=%d\n",
-    cfg.durationSeconds, cfg.jog, cfg.temp, cfg.rev
+    "DURATION=%d JOG=%d RINSE=%d TEMP=%d REV=%d\n",
+    cfg.durationSeconds, cfg.jog, cfg.rinse, cfg.temp, cfg.rev
   );
 
-  runWashSequence(cfg.jog, cfg.temp, cfg.rev);
+  runWashSequence(cfg.jog, cfg.rinse, cfg.temp, cfg.rev);
 
   startMachine(cfg.durationSeconds);
   return true;
@@ -618,6 +637,7 @@ pinMode(powerPin, OUTPUT);
 pinMode(jogA, OUTPUT);
 pinMode(jogB, OUTPUT);
 pinMode(tempPin, OUTPUT);
+pinMode(rinsePin, OUTPUT);
 pinMode(revPin, OUTPUT);
 pinMode(startPin, OUTPUT);
 
@@ -625,6 +645,7 @@ digitalWrite(powerPin, LOW);
 digitalWrite(jogA, LOW);
 digitalWrite(jogB, LOW);
 digitalWrite(tempPin, LOW);
+digitalWrite(rinsePin, LOW);
 digitalWrite(revPin, LOW);
 digitalWrite(startPin, LOW);
 
@@ -661,7 +682,7 @@ void loop() {
 
   return;
 }
-  if (millis() - lastPoll > 1000) {
+  if (millis() - lastPoll > 3000) {
     lastPoll = millis();
     checkCommand();
   }
